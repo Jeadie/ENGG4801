@@ -6,15 +6,12 @@ import sys
 from typing import Dict, List
 
 import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.options.pipeline_options import SetupOptions
 from apache_beam.pvalue import PCollection
 from apache_beam.pipeline import Pipeline
 
 import constants
 from constants import CSVHeader
-import custom_exceptions
-from util import get_pipeline_argv_from_argv, parse_argv
+from util import run_pipeline
 
 
 class PatientPipeline(object):
@@ -39,7 +36,9 @@ class PatientPipeline(object):
              The final PCollection from the patient pipeline.
         """
         patients = self.get_all_patients()
-        return beam.Map(self.format_patient_metadata, patients)
+        return (
+                patients | "Parse + Format patient metadata" >> beam.Map(self.format_patient_metadata)
+        )
 
     def format_patient_metadata(self, patient: List[str]) -> Dict[str, object]:
         """ Parses a single CSV line and extracts and formats the clinical and outcome data.
@@ -50,7 +49,9 @@ class PatientPipeline(object):
         Return:
 
         """
-        data = dict(filter(lambda x, y: y != "", zip(constants.JOINT_CSV_HEADERS, patient)))
+        print(patient)
+        print(list(zip(constants.JOINT_CSV_HEADERS, patient)))
+        data = dict(filter(lambda x: x[-1] != "", zip(constants.JOINT_CSV_HEADERS, patient)))
         return {
             "patient_id": int(data[CSVHeader.SUBJECT_ID.value]),
             "demographic_metadata": {
@@ -67,14 +68,14 @@ class PatientPipeline(object):
                 "Laterality": int(data.get(CSVHeader.LATERALITY.value)),
             },
             "LD": [int(data.get(x.value, -1)) for x in
-                   [CSVHeader.LD_BASELINE, CSVHeader.LD_POST_AC, CSVHeader.LD_INTER_REG, CSVHeader.LD_PRE_SURGERY]]
+                   [CSVHeader.LD_BASELINE, CSVHeader.LD_POST_AC, CSVHeader.LD_INTER_REG, CSVHeader.LD_PRE_SURGERY]],
             "outcome": {
-                "Sstat": int(data.get(CSVHeader.SURVIVAL_INDICATOR)),
-                "survival_duration": int(data.get(CSVHeader.SURVIVAL_DURATION)),
-                "rfs_ind": int(data.get(CSVHeader.RECURRENCE_FREE_INDICATOR)),
-                "rfs_duration": int(data.get(CSVHeader.RECURRENCE_FREE_DURATION)),
-                "pCR": int(data.get(CSVHeader.PATHOLOGICAL_COMPLETE_RESPONSE, -1)),
-                "RCB": int(data.get(CSVHeader.RESIDUAL_CANCER_BURDEN_CLASS, -1)),
+                "Sstat": int(data.get(CSVHeader.SURVIVAL_INDICATOR.value)),
+                "survival_duration": int(data.get(CSVHeader.SURVIVAL_DURATION.value)),
+                "rfs_ind": int(data.get(CSVHeader.RECURRENCE_FREE_INDICATOR.value)),
+                "rfs_duration": int(data.get(CSVHeader.RECURRENCE_FREE_DURATION.value)),
+                "pCR": int(data.get(CSVHeader.PATHOLOGICAL_COMPLETE_RESPONSE.value, -1)),
+                "RCB": int(data.get(CSVHeader.RESIDUAL_CANCER_BURDEN_CLASS.value, -1)),
             }
         }
 
@@ -90,13 +91,18 @@ class PatientPipeline(object):
         """
 
         # Both of these create PCollections with iterators that __next__() -> List[str]
-        outcomes_data = beam.Map(lambda x: (x[0], x[1:]),
-                                 self.load_csv(self.settings[constants.PATIENT_OUTCOME_CSV_FILE_KEY]))
-        clinical_data = beam.Map(lambda x: (x[0], x[1:]),
-                                 self.load_csv(self.settings[constants.PATIENT_CLINICAL_CSV_FILE_KEY]))
+
+        outcomes_data = (
+                self.load_csv(self.settings[constants.PATIENT_OUTCOME_CSV_FILE_KEY])
+                | "Parse Outcomes' Patient ID" >> beam.Map(lambda x: (x[0], x[1:]))
+        )
+        clinical_data = (
+                self.load_csv(self.settings[constants.PATIENT_CLINICAL_CSV_FILE_KEY])
+                | "Parse Clinical' Patient ID" >> beam.Map(lambda x: (x[0], x[1:]))
+        )
         return (
-                {"outcomes": outcomes_data, "clinical": clinical_data} | beam.CoGroupByKey()
-                | beam.Map(lambda patient_id, maps: ",".join([patient_id] + maps["outcomes"] + maps["clinical"]))
+                {"outcomes": outcomes_data, "clinical": clinical_data} | "Combine outcomes & clinical" >> beam.CoGroupByKey()
+                | "Flatten outcomes & clinical" >> beam.Map(self.flatten_patient_data)
         )
 
     def load_csv(self, csv_path: str) -> PCollection:
@@ -109,27 +115,32 @@ class PatientPipeline(object):
             A PCollection whereby each element is a row from the CSV with type, List[str].
         """
         return (self.pipeline
-                | beam.io.ReadFromText(csv_path)
-                | beam.FlatMap(lambda x: x.split(constants.CSV_DELIMETER))
+                | f"Read CSV: {csv_path}" >> beam.io.ReadFromText(csv_path, skip_header_lines=1)
+                | f"Split CSV: {csv_path}" >> beam.Map(lambda x: x.split(constants.CSV_DELIMETER))
                 )
 
+    def flatten_patient_data(self, patient):
+        """ Flattens a CoGroupByKey.
 
-def test_patient_pipeline(argv):
+        :param patient:
+        :return:
+        """
+        patient_id = patient[0]
+        outcomes = patient[1]["outcomes"][0]
+        clinical = patient[1]["clinical"][0]
+
+        return [patient_id] + outcomes + clinical
+
+
+def construct_patient_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
     """ Runs a manual test of the Patient Pipeline. Merely prints each element to STDOUT.
-
-    :param argv:
-    :return:
     """
-    argv = parse_argv(argv)
-    pipeline_arg = get_pipeline_argv_from_argv(argv)
-
-    with beam.Pipeline(options=PipelineOptions([f"--{k}={v}" for (k,v) in pipeline_arg.items()])) as test_pipeline:
-        output_patient_pipeline = PatientPipeline(test_pipeline, argv).construct()
-        beam.map(lambda x: print(f"Element: {str(x)}"), output_patient_pipeline)
+    output_patient_pipeline = PatientPipeline(p, vars(parsed_args)).construct()
+    _ = output_patient_pipeline | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
 
 if __name__ == '__main__':
     if "--test" in sys.argv:
-        test_patient_pipeline(sys.argv)
+        run_pipeline(sys.argv, construct_patient_test_pipeline)
+
     else:
         print("Currently, can only run Patient pipeline as test using `--test`.")
-        

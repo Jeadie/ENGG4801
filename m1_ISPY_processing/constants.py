@@ -1,15 +1,13 @@
-from Enum import enum
-
-# argument key -> help_description
-PIPELINE_CLI_ARGUMENTS = {}
+from enum import Enum
 
 
 ## PATIENT PIPELINE CONSTANTS
-PATIENT_OUTCOME_CSV_FILE_KEY = ""
-PATIENT_CLINICAL_CSV_FILE_KEY = ""
+PATIENT_OUTCOME_CSV_FILE_KEY = "patient_outcomes"
+PATIENT_CLINICAL_CSV_FILE_KEY = "patient_clinical"
 CSV_DELIMETER = ","
 
-class CSVHeader(enum):
+
+class CSVHeader(Enum):
     SUBJECT_ID = "SUBJECTID"
 
     # Clinical
@@ -19,7 +17,7 @@ class CSVHeader(enum):
     PgRpos='PgRpos'
     HRPos='HR Pos'
     HER2STATUS= 'Her2MostPos'
-    TRIPLE_LEVEL_HER = 'HR_HER2_STATUS'
+    TRIPLE_LEVEL_HER = 'HR_HER2_CATEGORY'
     BILATERAL_CANCER='BilateralCa'
     LATERALITY='Laterality'
     LD_BASELINE='MRI LD Baseline'
@@ -39,14 +37,15 @@ class CSVHeader(enum):
 
 CLINICAL_CSV_HEADERS = [
    CSVHeader.SUBJECT_ID.value,
+   CSVHeader.DATE.value,
    CSVHeader.AGE.value,
    CSVHeader.RACE.value,
    CSVHeader.ERpos.value,
    CSVHeader.PgRpos.value,
    CSVHeader.HRPos.value,
-   CSVHeader.HER2STATUS.value,
-   'HR_HER2_CATEGORY'
-   CSVHeader.TRIPLE_LEVEL_HER.value,
+    CSVHeader.HER2STATUS.value,
+    CSVHeader.TRIPLE_LEVEL_HER.value,
+    'HR_HER2_STATUS',
    CSVHeader.BILATERAL_CANCER.value,
    CSVHeader.LATERALITY.value,
    CSVHeader.LD_BASELINE.value,
