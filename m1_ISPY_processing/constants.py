@@ -1,9 +1,24 @@
 from enum import Enum
 
-
-## PATIENT PIPELINE CONSTANTS
+####################################
+########### CLI Arguments ##########
+####################################
 PATIENT_OUTCOME_CSV_FILE_KEY = "patient_outcomes"
 PATIENT_CLINICAL_CSV_FILE_KEY = "patient_clinical"
+STUDIES_PATH="studies_dir"
+SERIES_LIMIT="num-series"
+
+####################################
+##### SERIES PIPELINE CONSTANTS ####
+####################################
+GCS_PREFIX="gs://"
+BIGQUERY_STUDY_ID_HEADER = 'StudyInstanceUID'
+BIGQUERY_SERIES_ID_HEADER = 'SeriesInstanceUID'
+BIGQUERY_SERIES_QUERY= "SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID FROM `chc-tcia.ispy1.ispy1` GROUP BY StudyInstanceUID, SeriesInstanceUID"
+
+####################################
+#### PATIENT PIPELINE CONSTANTS ####
+####################################
 CSV_DELIMETER = ","
 
 

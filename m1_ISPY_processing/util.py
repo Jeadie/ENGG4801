@@ -35,6 +35,17 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
                         help="Path to the Patients' Clinical Data in CSV."
                         )
 
+    #Series GCS path
+    parser.add_argument(f"--{constants.STUDIES_PATH.replace('_', '-')}",
+                        dest=constants.STUDIES_PATH,
+                        help="Directory of folder containing studies and series."
+                        )
+    parser.add_argument(f"--{constants.SERIES_LIMIT.replace('_', '-')}",
+                        dest=constants.SERIES_LIMIT,
+                        type=int,
+                        help="Number of series to process in total."
+                        )
+
     known_args, pipeline_args = parser.parse_known_args(argv)
     return known_args, pipeline_args
 

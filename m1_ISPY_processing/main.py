@@ -5,7 +5,7 @@ from typing import List
 import apache_beam as beam
 
 from merge_and_save_pipeline import merge_and_save_pipeline
-from series_pipeline import series_pipeline
+from series_pipeline import SeriesPipeline
 from patient_pipeline import PatientPipeline
 from studies_pipeline import studies_pipeline
 from util import get_pipeline_argv_from_argv, parse_argv, run_pipeline
@@ -22,7 +22,7 @@ def construct_main_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline) -
         parsed_args: CLI arguments parsed and validated.
     :param p: A pipeline, preconfigured with pipeline options.
     """
-    output_series_pipeline = series_pipeline(p, parsed_args)
+    output_series_pipeline = SeriesPipeline(p, parsed_args).construct()
     output_patient_pipeline = PatientPipeline(p, parsed_args).construct()
     output_studies_pipeline = studies_pipeline(output_series_pipeline, parsed_args)
     merge_and_save_pipeline(output_patient_pipeline, output_studies_pipeline, parsed_args)

@@ -1,3 +1,6 @@
 apache-beam
 black
 flake8
+google-cloud-storage
+google-cloud-bigquery
+
