@@ -1,17 +1,19 @@
 import argparse
 import os
 import sys
+import tempfile
 from typing import Dict, List, Tuple
 
 import apache_beam as beam
 from apache_beam.pvalue import PCollection
 from apache_beam.pipeline import Pipeline
 from google.cloud import bigquery, storage
+import numpy as np
 
 import constants
-from constants import CSVHeader
 from util import run_pipeline
 
+SeriesObj = Tuple[np.array, Dict[str, object]]
 
 # TODO: Convert to two separate Series Pipelines: One for local files, one for those on GCS.
 class SeriesPipeline(object):
@@ -58,7 +60,8 @@ class SeriesPipeline(object):
         """
         return None
 
-    def convert_series(self, series_path: str) -> Tuple[int, int]:
+    #TODO: Do custom typing for Series Object
+    def convert_series(self, series_path: str) -> Tuple[SeriesObj, int]:
         """ Parse a set of DICOMs of a given series, parses out DICOM tags as metadata and converts the image to Numpy.
 
         Args:
@@ -67,6 +70,75 @@ class SeriesPipeline(object):
         Returns: A tuple of the Series Object for further processing and its distribution data for saving.
 
         """
+        dicoms = []
+        #TODO Two classes as mentioned above
+        # GCS Storage
+        if constants.GCS_PREFIX in series_path:
+            c = storage.Client()
+            bucket, prefix = util.parse_gcs_path(series_path)
+            # make temp directory
+            with tempfile.TemporaryDirectory() as tmp_dir:
+              # Download DICOMS to temp directory
+              for dicom in c.list_blobs(bucket, prefix=prefix):
+                relative_name = dicom.name.split("/")[-1]
+                dicom.download_to_filename(f"{tmp_dir.name}/{relative_name}")
+                d = self.process_local_DICOM(f"{tmp_dir.name}/{relative_name}")
+                dicoms.append(d)
+        #local_storage
+        else:
+            for dicom in list(filter(lambda x: ".dcm" in x, os.listdir(series_path))):
+                d = self.process_local_DICOM(f"{series_path}{dicom}")
+                dicoms.append(d)
+
+        meta = self.construct_metadata([d[-1] for d in dicoms])
+        series = self.construct_series(dicoms)
+        return (
+            meta,
+            series
+        )
+
+    def construct_series(self, dicoms: List[SeriesObj]) -> SeriesObj:
+        """ Converts a list of parsed DICOM items into a single Series object with n+1 dimensional image and metadata merged.
+
+        Args:
+            dicoms: A list of imaging objects
+
+        Returns:
+            A single SeriesObj
+        """
+        image = np.stack([d[0] for d in dicoms])
+
+        #TODO: Merge metadata instead of just mapping individually.
+        metadata = dict([(i, dicoms[i][-1] for i in range(len(dicoms)))])
+        return (
+            image,
+            metadata
+        )
+
+
+    def construct_metadata(self, dicom_metadata: List[Dict[str, object]]):
+        """
+
+        :param dicom_metadata:
+        :return:
+        """
+
+    def process_local_DICOM(self, path: str) -> Tuple[np.array, Dict[str, object]]:
+        """ Processes a locally saved, unopen DICOM file.
+
+
+        Args:
+            path: to the DICOM file.
+        Returns:
+            1. An ndarray of the DICOMs pixel data
+            2. The DICOMs data dictionary converted into Pythonic format.
+        """
+        d = dicom.dcmread(path)
+        metadata = util.construct_metadata_from_DICOM_dictionary
+        return (
+            d.pixel_array,
+            metadata
+        )
 
     # TODO: We may need to filter by bad Series (Segmentations, for example)
     def get_all_series(self) -> PCollection[str]:
@@ -75,7 +147,6 @@ class SeriesPipeline(object):
         Returns: A Pcollection of path strings to each Series in the ISPY1 dataset.
         """
         studies_dir = self.settings[constants.STUDIES_PATH]
-
         if constants.GCS_PREFIX in studies_dir:
             series_path = (
                     self.pipeline
@@ -89,6 +160,7 @@ class SeriesPipeline(object):
                     self.pipeline
                     | beam.Create([studies_dir])
                     # Efficiently traverse only two levels of depth, ignoring files.
+                    # TODO: Efficiently avoids DICOms, but is ugly and unclean
                     | beam.FlatMap(
                 lambda path: list(map(lambda y: f"{path}{y.name}/", filter(lambda x: x.is_dir(), os.scandir(path)))))
                     | beam.FlatMap(

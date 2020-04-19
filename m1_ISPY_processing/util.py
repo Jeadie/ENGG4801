@@ -1,8 +1,9 @@
 import argparse
-from typing import Callable, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
+import pydicom as dicom
 
 import constants
 
@@ -58,3 +59,40 @@ def run_pipeline(argv: List[str], construct_pipeline: Callable[[argparse.Namespa
     with beam.Pipeline(options=PipelineOptions(pipeline_arg)) as main_pipeline:
         construct_pipeline(argv, main_pipeline)
     return 0
+
+def construct_metadata_from_DICOM_dictionary(dicom: dicom.Dataset) -> Dict[str, object]:
+    """ Converts DICOM dictionary tags to a pythonic dictionary.
+
+    Args:
+        dicom: An open DICOM dataset.
+
+    Returns:
+    """
+    d = {}
+    for element in dicom.values():
+        if element.tag == constants.DICOM_PIXEL_TAG:
+            continue
+        if type(element.value) in constants.DICOM_SPECIFIC_TYPES:
+            # Convert DICOM type to Python type with function lookup table.
+            d[element.name] = constants.DICOM_TYPE_CONVERSION[type(element.value)](element.value)
+        else:
+            d[element.name] = element.value
+
+def parse_gcs_path(path: str) -> Tuple[str, str]:
+    """ Parses a full google cloud URI, returning its bucket and relative file path
+
+    Ex.
+        `gs://bucket_name/prefix/of/file/` -> (`bucket_name`, `prefix/of/file`)
+
+    Args:
+        path: A full GCS URI.
+
+    Return: A tuple containing the bucket and relative path of the URI.
+    """
+    x = path.split("/")
+    bucket = x[2]
+    prefix = x[3:-1]
+    return (
+        bucket,
+        "/".join(prefix)
+    )

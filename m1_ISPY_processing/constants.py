@@ -1,5 +1,9 @@
 from enum import Enum
 
+import pydicom as dicom
+
+import util
+
 ####################################
 ########### CLI Arguments ##########
 ####################################
@@ -15,6 +19,17 @@ GCS_PREFIX="gs://"
 BIGQUERY_STUDY_ID_HEADER = 'StudyInstanceUID'
 BIGQUERY_SERIES_ID_HEADER = 'SeriesInstanceUID'
 BIGQUERY_SERIES_QUERY= "SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID FROM `chc-tcia.ispy1.ispy1` GROUP BY StudyInstanceUID, SeriesInstanceUID"
+DICOM_TYPE_CONVERSION = {
+        dicom.valuerep.DSfloat: float,
+        dicom.valuerep.IS: int,
+        dicom.valuerep.PersonName3: str,
+        dicom.dataset.Dataset: util.dicom_dataset_to_dict,
+        dicom.multival.MultiValue: list,
+        dicom.uid.UID: str,
+}
+# NOTE: DICOM_SPECIFIC_TYPES is used instead of list(DICOM_TYPE_CONVERSION.keys()) for performance reasons.
+DICOM_SPECIFIC_TYPES = [dicom.uid.UID, dicom.valuerep.DSfloat, dicom.valuerep.IS, dicom.valuerep.PersonName3, dicom.dataset.Dataset, dicom.multival.MultiValue]
+DICOM_PIXEL_TAG = (0x7fe0, 0x0010)
 
 ####################################
 #### PATIENT PIPELINE CONSTANTS ####
