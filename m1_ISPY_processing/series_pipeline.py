@@ -1,4 +1,5 @@
 import argparse
+from functools import reduce
 import os
 import sys
 import tempfile
@@ -9,6 +10,7 @@ from apache_beam.pvalue import PCollection
 from apache_beam.pipeline import Pipeline
 from google.cloud import bigquery, storage
 import numpy as np
+import pydicom as dicom
 
 import constants
 from util import run_pipeline
@@ -38,7 +40,6 @@ class SeriesPipeline(object):
              The final PCollection from the patient pipeline.
         """
         series_paths = self.get_all_series()
-        return series_paths
         converted_series = (
                 series_paths
                 | "Parse and convert Series DICOMS" >> beam.Map(self.convert_series)
@@ -60,7 +61,6 @@ class SeriesPipeline(object):
         """
         return None
 
-    #TODO: Do custom typing for Series Object
     def convert_series(self, series_path: str) -> Tuple[SeriesObj, int]:
         """ Parse a set of DICOMs of a given series, parses out DICOM tags as metadata and converts the image to Numpy.
 
@@ -116,12 +116,18 @@ class SeriesPipeline(object):
         )
 
 
-    def construct_metadata(self, dicom_metadata: List[Dict[str, object]]):
+    def construct_metadata(self, dicom_metadata: List[Dict[str, object]]) -> Dict[str, object]:
         """
 
         :param dicom_metadata:
         :return:
         """
+        # Get the union of keys from all DICOMs
+        keys = reduce(lambda x, y: x | y, [set(dicom_metadata[i].keys()) for i in range(len(dicom_metadata))])
+
+        # Convert list of dictionaries into dictionary of lists (key -> List[values])
+        metadata = {k: [d[k] for d in dicom_metadata if d.get(k)] for k in keys}
+        return metadata
 
     def process_local_DICOM(self, path: str) -> Tuple[np.array, Dict[str, object]]:
         """ Processes a locally saved, unopen DICOM file.
