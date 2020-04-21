@@ -19,16 +19,30 @@ GCS_PREFIX="gs://"
 BIGQUERY_STUDY_ID_HEADER = 'StudyInstanceUID'
 BIGQUERY_SERIES_ID_HEADER = 'SeriesInstanceUID'
 BIGQUERY_SERIES_QUERY= "SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID FROM `chc-tcia.ispy1.ispy1` GROUP BY StudyInstanceUID, SeriesInstanceUID"
+
+
+# NOTE: DICOM_SPECIFIC_TYPES is used instead of list(DICOM_TYPE_CONVERSION.keys()) for performance reasons.
+DICOM_SPECIFIC_TYPES = [dicom.uid.UID, dicom.valuerep.DSfloat, dicom.valuerep.IS, dicom.valuerep.PersonName3, dicom.dataset.Dataset, dicom.multival.MultiValue]
+
+def test_multivalue(x):
+    print(x)
+    print(type(x[0]), type(x.type_constructor(x[0])))
+    if type(x[0]) in DICOM_SPECIFIC_TYPES:
+        print("SSS", [DICOM_TYPE_CONVERSION[type(x[0])](i) for i in x])
+        return [DICOM_TYPE_CONVERSION[type(x[0])](i) for i in x]
+    else:
+        return list([x.type_constructor(i) for i in x]),
+
 DICOM_TYPE_CONVERSION = {
         dicom.valuerep.DSfloat: float,
         dicom.valuerep.IS: int,
         dicom.valuerep.PersonName3: str,
-        dicom.dataset.Dataset: util.dicom_dataset_to_dict,
-        dicom.multival.MultiValue: list,
+        dicom.dataset.Dataset: util.construct_metadata_from_DICOM_dictionary,
+        dicom.multival.MultiValue: test_multivalue,
         dicom.uid.UID: str,
+        bytes: lambda x: x.decode()
 }
-# NOTE: DICOM_SPECIFIC_TYPES is used instead of list(DICOM_TYPE_CONVERSION.keys()) for performance reasons.
-DICOM_SPECIFIC_TYPES = [dicom.uid.UID, dicom.valuerep.DSfloat, dicom.valuerep.IS, dicom.valuerep.PersonName3, dicom.dataset.Dataset, dicom.multival.MultiValue]
+
 DICOM_PIXEL_TAG = (0x7fe0, 0x0010)
 
 ####################################

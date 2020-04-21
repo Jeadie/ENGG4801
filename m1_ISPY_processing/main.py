@@ -22,10 +22,10 @@ def construct_main_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline) -
         parsed_args: CLI arguments parsed and validated.
     :param p: A pipeline, preconfigured with pipeline options.
     """
-    output_series_pipeline = SeriesPipeline(p, parsed_args).construct()
-    output_patient_pipeline = PatientPipeline(p, parsed_args).construct()
-    output_studies_pipeline = studies_pipeline(output_series_pipeline, parsed_args)
-    merge_and_save_pipeline(output_patient_pipeline, output_studies_pipeline, parsed_args)
+    output_series = SeriesPipeline(p, parsed_args).construct()
+    output_patient = PatientPipeline(p, parsed_args).construct()
+    output_studies = studies_pipeline(output_series, parsed_args)
+    merge_and_save_pipeline(output_patient, output_studies, parsed_args)
 
 if __name__ == "__main__":
     main(sys.argv)

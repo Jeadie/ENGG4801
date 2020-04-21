@@ -13,9 +13,10 @@ import numpy as np
 import pydicom as dicom
 
 import constants
-from util import run_pipeline
+import util
 
 SeriesObj = Tuple[np.array, Dict[str, object]]
+
 
 # TODO: Convert to two separate Series Pipelines: One for local files, one for those on GCS.
 class SeriesPipeline(object):
@@ -32,10 +33,6 @@ class SeriesPipeline(object):
     def construct(self) -> PCollection:
         """ The patient Pipeline as documented.
 
-        Args:
-            main_pipeline: A reference to the main pipeline.
-            argv: Parsed arguments from CLI.
-
         Returns:
              The final PCollection from the patient pipeline.
         """
@@ -47,7 +44,7 @@ class SeriesPipeline(object):
         _ = (
                 converted_series
                 | "Get Metadata from Series" >> beam.Map(lambda x: x[0])
-                | "Save Metadata to Disk" >> self.process_series_distribution
+            # | "Save Metadata to Disk" >> self.process_series_distribution
         )
         return (
                 converted_series
@@ -71,21 +68,22 @@ class SeriesPipeline(object):
 
         """
         dicoms = []
-        #TODO Two classes as mentioned above
+        # TODO Two classes as mentioned above
         # GCS Storage
         if constants.GCS_PREFIX in series_path:
             c = storage.Client()
             bucket, prefix = util.parse_gcs_path(series_path)
             # make temp directory
             with tempfile.TemporaryDirectory() as tmp_dir:
-              # Download DICOMS to temp directory
-              for dicom in c.list_blobs(bucket, prefix=prefix):
-                relative_name = dicom.name.split("/")[-1]
-                dicom.download_to_filename(f"{tmp_dir.name}/{relative_name}")
-                d = self.process_local_DICOM(f"{tmp_dir.name}/{relative_name}")
-                dicoms.append(d)
-        #local_storage
+                # Download DICOMS to temp directory
+                for dicom in c.list_blobs(bucket, prefix=prefix):
+                    relative_name = dicom.name.split("/")[-1]
+                    dicom.download_to_filename(f"{tmp_dir}/{relative_name}")
+                    d = self.process_local_DICOM(f"{tmp_dir}/{relative_name}")
+                    dicoms.append(d)
+        # local_storage
         else:
+            # TODO: I think this should recurse multiple levels
             for dicom in list(filter(lambda x: ".dcm" in x, os.listdir(series_path))):
                 d = self.process_local_DICOM(f"{series_path}{dicom}")
                 dicoms.append(d)
@@ -108,13 +106,12 @@ class SeriesPipeline(object):
         """
         image = np.stack([d[0] for d in dicoms])
 
-        #TODO: Merge metadata instead of just mapping individually.
-        metadata = dict([(i, dicoms[i][-1] for i in range(len(dicoms)))])
+        # TODO: Merge metadata instead of just mapping individually.
+        metadata = self.construct_metadata([d[-1] for d in dicoms])
         return (
             image,
             metadata
         )
-
 
     def construct_metadata(self, dicom_metadata: List[Dict[str, object]]) -> Dict[str, object]:
         """
@@ -140,7 +137,8 @@ class SeriesPipeline(object):
             2. The DICOMs data dictionary converted into Pythonic format.
         """
         d = dicom.dcmread(path)
-        metadata = util.construct_metadata_from_DICOM_dictionary
+        d.decode()
+        metadata = util.construct_metadata_from_DICOM_dictionary(d)
         return (
             d.pixel_array,
             metadata
@@ -172,6 +170,7 @@ class SeriesPipeline(object):
                     | beam.FlatMap(
                 lambda y: list(map(lambda x: f"{y}{x.name}/", filter(lambda i: i.is_dir(), list(os.scandir(y))))))
             )
+
         return series_path
 
     def convert_bigquery_row_to_gcs(self, row: bigquery.table.Row) -> str:
@@ -190,16 +189,17 @@ class SeriesPipeline(object):
             f"{row.get(constants.BIGQUERY_SERIES_ID_HEADER)}/"
         )
 
+
 def construct_series_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
     """ Runs a manual test of the Series Pipeline.
     """
-    output_patient_pipeline = SeriesPipeline(p, vars(parsed_args)).construct()
-    _ = output_patient_pipeline | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
+    series = SeriesPipeline(p, vars(parsed_args)).construct()
+    _ = series | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
 
 
 if __name__ == '__main__':
     if "--test" in sys.argv:
-        run_pipeline(sys.argv, construct_series_test_pipeline)
+        util.run_pipeline(sys.argv, construct_series_test_pipeline)
 
     else:
         print("Currently, can only run Series pipeline as test using `--test`.")
