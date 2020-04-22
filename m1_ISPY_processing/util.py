@@ -7,7 +7,8 @@ from apache_beam.options.pipeline_options import PipelineOptions
 import pydicom
 
 import constants
-
+from series_pipeline_gcs import GCSSeriesPipeline
+from series_pipeline_local import LocalSeriesPipeline
 
 def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
     """ Parses CLI parameters, validates and converts them to required format.
@@ -64,7 +65,15 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
 
 
 def run_pipeline(argv: List[str], construct_pipeline: Callable[[argparse.Namespace, beam.Pipeline], None]) -> int:
-    """Main program run for data processing."""
+    """ Runs a arbitrary pipeline.
+
+    Args:
+        argv: User CLI args, unpassed (e.g sys.args)
+        construct_pipeline: A function that constructs the pipeline to run.
+
+    Returns:
+        0 if no errors occured.
+    """
     argv, pipeline_arg = _parse_argv(argv)
 
     # [Complete Pipeline]
@@ -79,6 +88,7 @@ def construct_metadata_from_DICOM_dictionary(dicom: pydicom.Dataset) -> Dict[str
         dicom: An open DICOM dataset.
 
     Returns:
+        The original DICOM dictionary (in the DICOM sense) to a pythonic dictionary. The pixel data tag is ignored.
     """
     d = {}
     for element in dicom.values():
@@ -112,3 +122,17 @@ def parse_gcs_path(path: str) -> Tuple[str, str]:
         bucket,
         "/".join(prefix)
     )
+
+def get_series_pipeline(studies_path: str) -> type:
+    """ Gets the appropriate series pipeline given the location of its studies.
+
+    Args:
+        studies_path: Path the the studies.
+
+    Returns:
+        The type of BaseSeriesPipeline to use, either GCSSeriesPipelin or LocalSeriesPipeline
+    """
+    if constants.GCS_PREFIX in studies_path:
+        return GCSSeriesPipeline
+    else:
+        return LocalSeriesPipeline

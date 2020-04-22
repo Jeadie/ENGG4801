@@ -2,21 +2,16 @@ from typing import Dict, List, Tuple
 
 import apache_beam as beam
 from apache_beam.pvalue import PCollection
-import numpy as np
 import tensorflow as tf
-from tensorflow_transform.coders import example_proto_coder
-import tensorflow_datasets as tfds
 
 import constants
+from custom_types import Types
 from util_tensorflow import (
     create_schema,
     int64_feature,
     float_feature,
     int64List_feature
 )
-
-SeriesObj = Tuple[np.array, Dict[str, object]]
-StudyObj = Tuple[str, List[SeriesObj]]
 
 
 class MergeSavePipeline(object):
@@ -50,17 +45,15 @@ class MergeSavePipeline(object):
                 | "Filter out Patients without Images or vice versa" >> beam.Filter(lambda x: (x[1]["studies"] != []))
                 | "Convert to tf.Examples" >> beam.Map(MergeSavePipeline.convert_to_tf_example)
         )
-        # schema = create_schema(tf_examples)
 
         (
             tf_examples
-            | "to string" >> beam.Map(lambda x: x.SerializeToString())
+            | "Serialise tf.Example" >> beam.Map(lambda x: x.SerializeToString())
             | "Save to TFRecord" >> beam.io.WriteToTFRecord(
-            file_path_prefix=self.settings[constants.TFRECORD_PATH],
-            file_name_suffix=constants.TFRECORD_SUFFIX,
-            num_shards=self.settings[constants.NUM_TFRECORD_SHARDS],
-            # coder=example_proto_coder.ExampleProtoCoder(schema)
-        )
+                file_path_prefix=self.settings[constants.TFRECORD_PATH],
+                file_name_suffix=constants.TFRECORD_SUFFIX,
+                num_shards=self.settings[constants.NUM_TFRECORD_SHARDS],
+           )
         )
 
     @staticmethod
@@ -89,7 +82,7 @@ class MergeSavePipeline(object):
         )
 
 
-def convert_series_to_feature(series: SeriesObj) -> Dict[str, tf.train.Feature]:
+def convert_series_to_feature(series: Types.SeriesObj) -> Dict[str, tf.train.Feature]:
     """ Converts a single SeriesObj for use as a Feature.
 
     Args:
@@ -110,7 +103,7 @@ def convert_series_to_feature(series: SeriesObj) -> Dict[str, tf.train.Feature]:
     }
 
 
-def convert_study_to_feature(study: List[SeriesObj]):
+def convert_study_to_feature(study: List[Types.SeriesObj]):
     return dict(
         [(s[1]["Series Instance UID"], convert_series_to_feature(s)) for s in study]
     )

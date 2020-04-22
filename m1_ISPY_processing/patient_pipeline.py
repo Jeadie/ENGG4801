@@ -74,8 +74,6 @@ class PatientPipeline(object):
             }
         }
 
-
-    # TODO: This seems sloppy.
     def get_all_patients(self) -> PCollection:
         """ Parses the two CSV files, outcomes and clinical, and merges them based on PatientID.
 
@@ -132,6 +130,7 @@ def construct_patient_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pip
     """
     output_patient_pipeline = PatientPipeline(p, vars(parsed_args)).construct()
     _ = output_patient_pipeline | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
+
 
 if __name__ == '__main__':
     if "--test" in sys.argv:

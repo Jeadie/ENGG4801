@@ -1,18 +1,13 @@
-import argparse
 from functools import reduce
-import os
-import sys
-import tempfile
 from typing import Dict, List, Tuple
 
 import apache_beam as beam
 from apache_beam.pvalue import PCollection
 from apache_beam.pipeline import Pipeline
-from google.cloud import bigquery, storage
 import numpy as np
 import pydicom as dicom
 
-import constants
+from custom_types import Types
 import util
 
 SeriesObj = Tuple[np.array, Dict[str, object]]
@@ -39,6 +34,7 @@ class BaseSeriesPipeline(object):
         converted_series = (
                 series_paths
                 | "Parse and convert Series DICOMS" >> beam.Map(self.convert_series)
+                | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
         )
         _ = (
                 converted_series
@@ -59,7 +55,7 @@ class BaseSeriesPipeline(object):
         return None
 
 
-    def convert_series(self, series_path: str) -> Tuple[SeriesObj, int]:
+    def convert_series(self, series_path: str) -> Tuple[Types.SeriesObj, int]:
         """ Parse a set of DICOMs of a given series, parses out DICOM tags as metadata and converts the image to Numpy.
 
         Args:
@@ -69,6 +65,9 @@ class BaseSeriesPipeline(object):
 
         """
         dicoms = self.get_dicoms(series_path)
+        if len(dicoms) == 0:
+            return None
+
         meta = self.construct_metadata([d[-1] for d in dicoms])
         series = self.construct_series(dicoms)
         return (
@@ -89,7 +88,7 @@ class BaseSeriesPipeline(object):
         raise NotImplementedError("Base Class, `BaseSeriesPipeline` does not implement `convert_series`")
 
 
-    def construct_series(self, dicoms: List[SeriesObj]) -> SeriesObj:
+    def construct_series(self, dicoms: List[Types.SeriesObj]) -> SeriesObj:
         """ Converts a list of parsed DICOM items into a single Series object with n+1 dimensional image and metadata merged.
 
         Args:
@@ -155,21 +154,3 @@ class BaseSeriesPipeline(object):
         Returns: A Pcollection of path strings to each Series in the ISPY1 dataset.
         """
         raise NotImplementedError("Base Class, `BaseSeriesPipeline` does not implement `get_all_series`")
-
-
-    def convert_bigquery_row_to_gcs(self, row: bigquery.table.Row) -> str:
-        """ Converts a Biquery Row from the ISPY1 Table into the path to its directory in Google Cloud Storage.
-
-        Args
-            row: A BigQuery row with values: StudyInstanceUID, SeriesInstanceUID
-
-        Returns:
-             A Path to the series:
-                `gs://<bucket_name>/<dataset_prefix>/StudyInstanceUID/SeriesInstanceUID/)
-        """
-        return (
-            f"{self.settings[constants.STUDIES_PATH]}"
-            f"{row.get(constants.BIGQUERY_STUDY_ID_HEADER)}/"
-            f"{row.get(constants.BIGQUERY_SERIES_ID_HEADER)}/"
-        )
-

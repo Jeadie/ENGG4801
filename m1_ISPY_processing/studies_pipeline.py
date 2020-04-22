@@ -1,16 +1,14 @@
 import argparse
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import apache_beam as beam
 from apache_beam.pvalue import PCollection
-import numpy as np
 
-from series_pipeline import SeriesPipeline
+import constants
+from custom_types import Types
 import util
 
-SeriesObj = Tuple[np.array, Dict[str, object]]
-StudyObj = Tuple[str, List[SeriesObj]]
 
 class StudiesPipeline(object):
 
@@ -38,7 +36,7 @@ class StudiesPipeline(object):
         )
         return group_by_patients
 
-    def parse_patient_from_study(self, study: StudyObj) -> Tuple[str, StudyObj]:
+    def parse_patient_from_study(self, study: Types.StudyObj) -> Tuple[str, Types.StudyObj]:
         """ Turns an element in a PCollection into a keyed, by patient id, element.
 
         Indexing:
@@ -55,7 +53,8 @@ class StudiesPipeline(object):
 def construct_studies_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
     """ Runs a manual test of the Series Pipeline.
     """
-    series = SeriesPipeline(p, vars(parsed_args)).construct()
+    args = vars(parsed_args)
+    series = util.get_series_pipeline(args[constants.STUDIES_PATH])(p, args).construct()
     studies = StudiesPipeline(series, vars(parsed_args)).construct()
     _ = studies | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
 

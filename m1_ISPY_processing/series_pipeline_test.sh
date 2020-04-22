@@ -4,6 +4,6 @@
 python series_pipeline.py --test \
     --runner=DirectRunner \
     --studies-dir="./" \#"gs://ispy_dataquery/dicoms/" \
-    --num-series=2 \
+    --num-series=1\
     --patient-clinical="clinical_small.csv" \
     --patient-outcomes="outcome_small.csv" \
