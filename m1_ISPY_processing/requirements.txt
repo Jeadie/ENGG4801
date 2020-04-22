@@ -1,6 +1,11 @@
-apache-beam
+pyarrow<0.16
+apache-beam<2.18
 black
 flake8
 google-cloud-storage
 google-cloud-bigquery
 pydicom
+tensorflow-transform
+tfx
+tensorflow
+tensorflow-datasets

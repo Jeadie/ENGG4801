@@ -18,8 +18,7 @@ import util
 SeriesObj = Tuple[np.array, Dict[str, object]]
 
 
-# TODO: Convert to two separate Series Pipelines: One for local files, one for those on GCS.
-class SeriesPipeline(object):
+class BaseSeriesPipeline(object):
 
     def __init__(self, main_pipeline: Pipeline, argv: Dict[str, object]):
         """ Constructor.
@@ -40,7 +39,6 @@ class SeriesPipeline(object):
         converted_series = (
                 series_paths
                 | "Parse and convert Series DICOMS" >> beam.Map(self.convert_series)
-                | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
         )
         _ = (
                 converted_series
@@ -52,12 +50,14 @@ class SeriesPipeline(object):
                 | "Get Series Object from Series" >> beam.Map(lambda x: x[-1])
         )
 
+    # TODO: This should be done in this class
     def process_series_distribution(self, dist: Dict[str, str]) -> None:
         """ Saves a series distribution to CSV.
 
         :return:
         """
         return None
+
 
     def convert_series(self, series_path: str) -> Tuple[SeriesObj, int]:
         """ Parse a set of DICOMs of a given series, parses out DICOM tags as metadata and converts the image to Numpy.
@@ -68,36 +68,26 @@ class SeriesPipeline(object):
         Returns: A tuple of the Series Object for further processing and its distribution data for saving.
 
         """
-        dicoms = []
-        # TODO Two classes as mentioned above
-        # GCS Storage
-        if constants.GCS_PREFIX in series_path:
-            c = storage.Client()
-            bucket, prefix = util.parse_gcs_path(series_path)
-            # make temp directory
-            with tempfile.TemporaryDirectory() as tmp_dir:
-                # Download DICOMS to temp directory
-                for dicom in c.list_blobs(bucket, prefix=prefix):
-                    relative_name = dicom.name.split("/")[-1]
-                    dicom.download_to_filename(f"{tmp_dir}/{relative_name}")
-                    d = self.process_local_DICOM(f"{tmp_dir}/{relative_name}")
-                    dicoms.append(d)
-        # local_storage
-        else:
-            # TODO: I think this should recurse multiple levels
-            for dicom in list(filter(lambda x: ".dcm" in x, os.listdir(series_path))):
-                d = self.process_local_DICOM(f"{series_path}{dicom}")
-                dicoms.append(d)
-
-        if len(dicoms) == 0:
-            return None
-
+        dicoms = self.get_dicoms(series_path)
         meta = self.construct_metadata([d[-1] for d in dicoms])
         series = self.construct_series(dicoms)
         return (
             meta,
             series
         )
+
+
+    def get_dicoms(self, series_path: str) -> List[SeriesObj]:
+        """ Gets the DICOMs for a Series.
+
+        Args:
+            series_path: URI to the Series directory.
+
+        Returns:
+            A list of Series Objects, each with one DICOM in their Series.
+        """
+        raise NotImplementedError("Base Class, `BaseSeriesPipeline` does not implement `convert_series`")
+
 
     def construct_series(self, dicoms: List[SeriesObj]) -> SeriesObj:
         """ Converts a list of parsed DICOM items into a single Series object with n+1 dimensional image and metadata merged.
@@ -144,7 +134,6 @@ class SeriesPipeline(object):
     def process_local_DICOM(self, path: str) -> Tuple[np.array, Dict[str, object]]:
         """ Processes a locally saved, unopen DICOM file.
 
-
         Args:
             path: to the DICOM file.
         Returns:
@@ -165,28 +154,8 @@ class SeriesPipeline(object):
 
         Returns: A Pcollection of path strings to each Series in the ISPY1 dataset.
         """
-        studies_dir = self.settings[constants.STUDIES_PATH]
-        if constants.GCS_PREFIX in studies_dir:
-            series_path = (
-                    self.pipeline
-                    | "Starting Bigquery" >> beam.Create([constants.BIGQUERY_SERIES_QUERY])
-                    | "Querying" >> beam.FlatMap(lambda query: bigquery.Client().query(query).result(
-                max_results=self.settings.get(constants.SERIES_LIMIT, None)))
-                    | "Convert BQ row to GCS paths" >> beam.Map(self.convert_bigquery_row_to_gcs)
-            )
-        else:
-            series_path = (
-                    self.pipeline
-                    | beam.Create([studies_dir])
-                    # Efficiently traverse only two levels of depth, ignoring files.
-                    # TODO: Efficiently avoids DICOms, but is ugly and unclean
-                    | beam.FlatMap(
-                lambda path: list(map(lambda y: f"{path}{y.name}/", filter(lambda x: x.is_dir(), os.scandir(path)))))
-                    | beam.FlatMap(
-                lambda y: list(map(lambda x: f"{y}{x.name}/", filter(lambda i: i.is_dir(), list(os.scandir(y))))))
-            )
+        raise NotImplementedError("Base Class, `BaseSeriesPipeline` does not implement `get_all_series`")
 
-        return series_path
 
     def convert_bigquery_row_to_gcs(self, row: bigquery.table.Row) -> str:
         """ Converts a Biquery Row from the ISPY1 Table into the path to its directory in Google Cloud Storage.
@@ -204,17 +173,3 @@ class SeriesPipeline(object):
             f"{row.get(constants.BIGQUERY_SERIES_ID_HEADER)}/"
         )
 
-
-def construct_series_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
-    """ Runs a manual test of the Series Pipeline.
-    """
-    series = SeriesPipeline(p, vars(parsed_args)).construct()
-    _ = series | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
-
-
-if __name__ == '__main__':
-    if "--test" in sys.argv:
-        util.run_pipeline(sys.argv, construct_series_test_pipeline)
-
-    else:
-        print("Currently, can only run Series pipeline as test using `--test`.")

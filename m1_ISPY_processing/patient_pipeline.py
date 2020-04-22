@@ -46,8 +46,6 @@ class PatientPipeline(object):
         Return:
 
         """
-        print(patient)
-        print(list(zip(constants.JOINT_CSV_HEADERS, patient)))
         data = dict(filter(lambda x: x[-1] != "", zip(constants.JOINT_CSV_HEADERS, patient)))
         return {
             "patient_id": int(data[CSVHeader.SUBJECT_ID.value]),
@@ -59,10 +57,10 @@ class PatientPipeline(object):
                 "ERpos": int(data.get(CSVHeader.ERpos.value, -1)),
                 "Pgpos": int(data.get(CSVHeader.PgRpos.value, -1)),
                 "HRpos": int(data.get(CSVHeader.HRPos.value, -1)),
-                "HER_two_status": int(data.get(CSVHeader.HER2STATUS.value)),
-                "three_level_HER": int(data.get(CSVHeader.TRIPLE_LEVEL_HER.value)),
-                "Bilateral": int(data.get(CSVHeader.BILATERAL_CANCER.value)),
-                "Laterality": int(data.get(CSVHeader.LATERALITY.value)),
+                "HER_two_status": int(data.get(CSVHeader.HER2STATUS.value, -1)),
+                "three_level_HER": int(data.get(CSVHeader.TRIPLE_LEVEL_HER.value, -1)),
+                "Bilateral": int(data.get(CSVHeader.BILATERAL_CANCER.value, -1)),
+                "Laterality": int(data.get(CSVHeader.LATERALITY.value, -1)),
             },
             "LD": [int(data.get(x.value, -1)) for x in
                    [CSVHeader.LD_BASELINE, CSVHeader.LD_POST_AC, CSVHeader.LD_INTER_REG, CSVHeader.LD_PRE_SURGERY]],

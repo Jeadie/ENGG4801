@@ -1,4 +1,5 @@
 import argparse
+import os
 from typing import Callable, Dict, List, Tuple
 
 import apache_beam as beam
@@ -45,6 +46,17 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
                         dest=constants.SERIES_LIMIT,
                         type=int,
                         help="Number of series to process in total."
+                        )
+    parser.add_argument(f"--{constants.TFRECORD_PATH.replace('_', '-')}",
+                        dest=constants.TFRECORD_PATH,
+                        help="Directory to save TFRecords in.",
+                        default=os.getcwd()
+                        )
+    parser.add_argument(f"--{constants.NUM_TFRECORD_SHARDS.replace('_', '-')}",
+                        dest=constants.NUM_TFRECORD_SHARDS,
+                        type=int,
+                        help="Number of shards to save the TFRecord into.",
+                        default=1
                         )
 
     known_args, pipeline_args = parser.parse_known_args(argv)

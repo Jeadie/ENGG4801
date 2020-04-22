@@ -4,6 +4,7 @@ import pydicom as dicom
 
 import util
 
+# TODO: Consider turning these into an Enum.
 ####################################
 ########### CLI Arguments ##########
 ####################################
@@ -11,6 +12,14 @@ PATIENT_OUTCOME_CSV_FILE_KEY = "patient_outcomes"
 PATIENT_CLINICAL_CSV_FILE_KEY = "patient_clinical"
 STUDIES_PATH="studies_dir"
 SERIES_LIMIT="num-series"
+TFRECORD_PATH="tfrecord_path"
+NUM_TFRECORD_SHARDS="num_shards"
+
+####################################
+### MERGE+SAVE PIPELINE CONSTANTS ##
+####################################
+TFRECORD_SUFFIX=".tfrecords"
+
 
 ####################################
 ##### SERIES PIPELINE CONSTANTS ####
@@ -25,13 +34,10 @@ BIGQUERY_SERIES_QUERY= "SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID FROM
 DICOM_SPECIFIC_TYPES = [dicom.uid.UID, dicom.valuerep.DSfloat, dicom.valuerep.IS, dicom.valuerep.PersonName3, dicom.dataset.Dataset, dicom.multival.MultiValue]
 
 def test_multivalue(x):
-    print(x)
-    print(type(x[0]), type(x.type_constructor(x[0])))
     if type(x[0]) in DICOM_SPECIFIC_TYPES:
-        print("SSS", [DICOM_TYPE_CONVERSION[type(x[0])](i) for i in x])
         return [DICOM_TYPE_CONVERSION[type(x[0])](i) for i in x]
     else:
-        return list([x.type_constructor(i) for i in x]),
+        return [x.type_constructor(i) for i in x]
 
 DICOM_TYPE_CONVERSION = {
         dicom.valuerep.DSfloat: float,

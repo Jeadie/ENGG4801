@@ -1,8 +1,5 @@
 import argparse
-from functools import reduce
-import os
 import sys
-import tempfile
 from typing import Dict, List, Tuple
 
 import apache_beam as beam
@@ -14,9 +11,7 @@ import util
 
 SeriesObj = Tuple[np.array, Dict[str, object]]
 StudyObj = Tuple[str, List[SeriesObj]]
-PatientObj = Tuple[str, List[StudyObj]]
 
-# TODO: Convert to two separate Series Pipelines: One for local files, one for those on GCS.
 class StudiesPipeline(object):
 
     def __init__(self, series_collection: PCollection, argv: Dict[str, object]):
@@ -36,9 +31,9 @@ class StudiesPipeline(object):
         """
         group_by_patients = (
                 self.series
-                | "Parse out Study ID from each Series Obj" >> beam.Map(lambda x: (x[1].get("Study Instance UID")[0], x))
+                | "Parse out Study ID from each Series Obj" >> beam.Map(lambda x: (x[1].get("Study Instance UID"), x))
                 | "Group by Study ID" >> beam.GroupByKey()
-                | "Parse out Patient ID" >> beam.Map(self.parse_patient_from_study)
+                | "Parse out Patient ID" >> beam.Map(self.parse_patient_from_study )
                 | "Group by Patient ID" >> beam.GroupByKey()
         )
         return group_by_patients
@@ -55,7 +50,7 @@ class StudiesPipeline(object):
             study: A single Study Object.
         A keyed element Tuple of the form (Patient ID, Study Object).
         """
-        return (study[1][0][1].get("Clinical Trial Subject ID")[0], study)
+        return (study[1][0][1].get("Clinical Trial Subject ID"), study)
 
 def construct_studies_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
     """ Runs a manual test of the Series Pipeline.

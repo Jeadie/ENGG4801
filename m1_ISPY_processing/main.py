@@ -4,11 +4,11 @@ from typing import List
 
 import apache_beam as beam
 
-from merge_and_save_pipeline import merge_and_save_pipeline
+from merge_and_save_pipeline import MergeSavePipeline
 from series_pipeline import SeriesPipeline
 from patient_pipeline import PatientPipeline
-from studies_pipeline import studies_pipeline
-from util import get_pipeline_argv_from_argv, parse_argv, run_pipeline
+from studies_pipeline import StudiesPipeline
+from util import run_pipeline
 
 
 def main(argv: List[str]) -> int:
@@ -22,10 +22,11 @@ def construct_main_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline) -
         parsed_args: CLI arguments parsed and validated.
     :param p: A pipeline, preconfigured with pipeline options.
     """
-    output_series = SeriesPipeline(p, parsed_args).construct()
-    output_patient = PatientPipeline(p, parsed_args).construct()
-    output_studies = studies_pipeline(output_series, parsed_args)
-    merge_and_save_pipeline(output_patient, output_studies, parsed_args)
+    args = vars(parsed_args)
+    output_series = SeriesPipeline(p, args).construct()
+    output_patient = PatientPipeline(p, args).construct()
+    output_studies = StudiesPipeline(output_series, args).construct()
+    MergeSavePipeline(output_patient, output_studies, args).construct()
 
 if __name__ == "__main__":
     main(sys.argv)
