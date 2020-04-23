@@ -8,6 +8,7 @@ import numpy as np
 import pydicom as dicom
 
 from custom_types import Types
+from series_filter import SeriesFilter
 import util
 
 SeriesObj = Tuple[np.array, Dict[str, object]]
@@ -23,6 +24,7 @@ class BaseSeriesPipeline(object):
         """
         self.pipeline = main_pipeline
         self.settings = argv
+        self.filter = SeriesFilter()
 
     def construct(self) -> PCollection:
         """ The patient Pipeline as documented.
@@ -33,6 +35,7 @@ class BaseSeriesPipeline(object):
         series_paths = self.get_all_series()
         converted_series = (
                 series_paths
+                | "Only keep useful Series" >> beam.Filter(self.filter.filter_series_path)
                 | "Parse and convert Series DICOMS" >> beam.Map(self.convert_series)
                 | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
         )

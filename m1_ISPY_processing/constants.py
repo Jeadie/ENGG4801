@@ -24,6 +24,7 @@ TFRECORD_SUFFIX=".tfrecords"
 ####################################
 ##### SERIES PIPELINE CONSTANTS ####
 ####################################
+LOCAL_SERIES_FILTER_FILE = "ISPY1_MetaData.csv"
 GCS_PREFIX="gs://"
 BIGQUERY_STUDY_ID_HEADER = 'StudyInstanceUID'
 BIGQUERY_SERIES_ID_HEADER = 'SeriesInstanceUID'

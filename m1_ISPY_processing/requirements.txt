@@ -9,3 +9,4 @@ tensorflow-transform
 tfx
 tensorflow
 tensorflow-datasets
+pandas
