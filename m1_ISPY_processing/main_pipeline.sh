@@ -5,5 +5,7 @@ python main.py  \
     --runner=DirectRunner \
     --studies-dir="./" \
     --num-series=2 \
+    --tfrecord-name="./result" \
+    --num-shards=1 \
     --patient-clinical="clinical.csv" \
     --patient-outcomes="outcome.csv" \

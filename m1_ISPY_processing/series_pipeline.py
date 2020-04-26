@@ -10,6 +10,7 @@ import util
 
 SeriesObj = Tuple[np.array, Dict[str, object]]
 
+
 def construct_series_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
     """ Runs a manual test of the Series Pipeline.
     """
@@ -18,7 +19,7 @@ def construct_series_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipe
     _ = series | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if "--test" in sys.argv:
         util.run_pipeline(sys.argv, construct_series_test_pipeline)
 

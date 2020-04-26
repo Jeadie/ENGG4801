@@ -1,7 +1,7 @@
 import argparse
 import sys
 import tempfile
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import apache_beam as beam
 from apache_beam.pvalue import PCollection
@@ -13,14 +13,13 @@ from custom_types import Types
 import util
 
 
-# TODO: Convert to two separate Series Pipelines: One for local files, one for those on GCS.
 class GCSSeriesPipeline(BaseSeriesPipeline):
-    """Series Pipeline for files stored in GCS and thus require Google's Bigquery to find all series."""
+    """Series Pipeline for files stored in GCS and thus require Google's Bigquery
+        to find all series.
+    """
 
     def process_series_distribution(self, dist: Dict[str, str]) -> None:
         """ Saves a series distribution to CSV.
-
-        :return:
         """
         return None
 
@@ -47,23 +46,28 @@ class GCSSeriesPipeline(BaseSeriesPipeline):
 
         return dicoms
 
-    # TODO: We may need to filter by bad Series (Segmentations, for example)
     def get_all_series(self) -> PCollection[str]:
         """ Gets the path to all the Series in the dataset.
 
         Returns: A Pcollection of path strings to each Series in the ISPY1 dataset.
         """
         series_path = (
-                self.pipeline
-                | "Starting Bigquery" >> beam.Create([constants.BIGQUERY_SERIES_QUERY])
-                | "Querying" >> beam.FlatMap(lambda query: bigquery.Client().query(query).result(
-            max_results=self.settings.get(constants.SERIES_LIMIT, None)))
-                | "Convert BQ row to GCS paths" >> beam.Map(self.convert_bigquery_row_to_gcs)
+            self.pipeline
+            | "Starting Bigquery" >> beam.Create([constants.BIGQUERY_SERIES_QUERY])
+            | "Querying"
+            >> beam.FlatMap(
+                lambda query: bigquery.Client()
+                .query(query)
+                .result(max_results=self.settings.get(constants.SERIES_LIMIT, None))
+            )
+            | "Convert BQ row to GCS paths"
+            >> beam.Map(self.convert_bigquery_row_to_gcs)
         )
         return series_path
 
     def convert_bigquery_row_to_gcs(self, row: bigquery.table.Row) -> str:
-        """ Converts a Biquery Row from the ISPY1 Table into the path to its directory in Google Cloud Storage.
+        """ Converts a Biquery Row from the ISPY1 Table into the path to its directory in
+            Google Cloud Storage.
 
         Args
             row: A BigQuery row with values: StudyInstanceUID, SeriesInstanceUID
@@ -86,7 +90,7 @@ def construct_series_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipe
     _ = series | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if "--test" in sys.argv:
         util.run_pipeline(sys.argv, construct_series_test_pipeline)
 

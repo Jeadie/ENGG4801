@@ -11,7 +11,6 @@ import util
 
 
 class StudiesPipeline(object):
-
     def __init__(self, series_collection: PCollection, argv: Dict[str, object]):
         """ Constructor.
         Args:
@@ -28,15 +27,18 @@ class StudiesPipeline(object):
              The final PCollection from the patient pipeline.
         """
         group_by_patients = (
-                self.series
-                | "Parse out Study ID from each Series Obj" >> beam.Map(lambda x: (x[1].get("Study Instance UID"), x))
-                | "Group by Study ID" >> beam.GroupByKey()
-                | "Parse out Patient ID" >> beam.Map(self.parse_patient_from_study )
-                | "Group by Patient ID" >> beam.GroupByKey()
+            self.series
+            | "Parse out Study ID from each Series Obj"
+            >> beam.Map(lambda x: (x[1].pop("Study Instance UID"), x))
+            | "Group by Study ID" >> beam.GroupByKey()
+            | "Parse out Patient ID" >> beam.Map(self.parse_patient_from_study)
+            | "Group by Patient ID" >> beam.GroupByKey()
         )
         return group_by_patients
 
-    def parse_patient_from_study(self, study: Types.StudyObj) -> Tuple[str, Types.StudyObj]:
+    def parse_patient_from_study(
+        self, study: Types.StudyObj
+    ) -> Tuple[str, Types.StudyObj]:
         """ Turns an element in a PCollection into a keyed, by patient id, element.
 
         Indexing:
@@ -48,7 +50,8 @@ class StudiesPipeline(object):
             study: A single Study Object.
         A keyed element Tuple of the form (Patient ID, Study Object).
         """
-        return (study[1][0][1].get("Clinical Trial Subject ID"), study)
+        return (study[1][0][1].pop("Clinical Trial Subject ID"), study)
+
 
 def construct_studies_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
     """ Runs a manual test of the Series Pipeline.
@@ -59,10 +62,9 @@ def construct_studies_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pip
     _ = studies | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if "--test" in sys.argv:
         util.run_pipeline(sys.argv, construct_studies_test_pipeline)
 
     else:
         print("Currently, can only run Series pipeline as test using `--test`.")
-

@@ -13,7 +13,6 @@ from custom_types import Types
 import util
 
 
-# TODO: Convert to two separate Series Pipelines: One for local files, one for those on GCS.
 class LocalSeriesPipeline(BaseSeriesPipeline):
     """Series Pipeline for files found locally."""
 
@@ -23,7 +22,6 @@ class LocalSeriesPipeline(BaseSeriesPipeline):
         :return:
         """
         return None
-
 
     def get_dicoms(self, series_path: str) -> List[Types.SeriesObj]:
         """ Gets the DICOMs for a Series.
@@ -41,7 +39,6 @@ class LocalSeriesPipeline(BaseSeriesPipeline):
 
         return dicoms
 
-    # TODO: We may need to filter by bad Series (Segmentations, for example)
     def get_all_series(self) -> PCollection[str]:
         """ Gets the path to all the Series in the dataset.
 
@@ -49,13 +46,25 @@ class LocalSeriesPipeline(BaseSeriesPipeline):
         """
         studies_dir = self.settings[constants.STUDIES_PATH]
         series_path = (
-                self.pipeline
-                | beam.Create([studies_dir])
-                # Efficiently traverse only two levels of depth, ignoring files.
-                | beam.FlatMap(
-            lambda path: list(map(lambda y: f"{path}{y.name}/", filter(lambda x: x.is_dir(), os.scandir(path)))))
-                | beam.FlatMap(
-            lambda y: list(map(lambda x: f"{y}{x.name}/", filter(lambda i: i.is_dir(), list(os.scandir(y))))))
+            self.pipeline
+            | beam.Create([studies_dir])
+            # Efficiently traverse only two levels of depth, ignoring files.
+            | beam.FlatMap(
+                lambda path: list(
+                    map(
+                        lambda y: f"{path}{y.name}/",
+                        filter(lambda x: x.is_dir(), os.scandir(path)),
+                    )
+                )
+            )
+            | beam.FlatMap(
+                lambda y: list(
+                    map(
+                        lambda x: f"{y}{x.name}/",
+                        filter(lambda i: i.is_dir(), list(os.scandir(y))),
+                    )
+                )
+            )
         )
 
         return series_path
@@ -68,7 +77,7 @@ def construct_series_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipe
     _ = series | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if "--test" in sys.argv:
         util.run_pipeline(sys.argv, construct_series_test_pipeline)
 

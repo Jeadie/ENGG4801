@@ -12,7 +12,6 @@ from util import run_pipeline
 
 
 class PatientPipeline(object):
-
     def __init__(self, main_pipeline: Pipeline, argv: Dict[str, object]):
         """ Constructor.
         Args:
@@ -33,8 +32,8 @@ class PatientPipeline(object):
              The final PCollection from the patient pipeline.
         """
         patients = self.get_all_patients()
-        return (
-                patients | "Parse + Format patient metadata" >> beam.Map(self.format_patient_metadata)
+        return patients | "Parse + Format patient metadata" >> beam.Map(
+            self.format_patient_metadata
         )
 
     def format_patient_metadata(self, patient: List[str]) -> Dict[str, object]:
@@ -46,12 +45,14 @@ class PatientPipeline(object):
         Return:
 
         """
-        data = dict(filter(lambda x: x[-1] != "", zip(constants.JOINT_CSV_HEADERS, patient)))
+        data = dict(
+            filter(lambda x: x[-1] != "", zip(constants.JOINT_CSV_HEADERS, patient))
+        )
         return {
             "patient_id": int(data[CSVHeader.SUBJECT_ID.value]),
             "demographic_metadata": {
-                "age": float(data[CSVHeader.AGE.value]),
-                "race": int(data[CSVHeader.RACE.value]),
+                "age": float(data.get(CSVHeader.AGE.value, -1)),
+                "race": int(data.get(CSVHeader.RACE.value, -1)),
             },
             "clinical": {
                 "ERpos": int(data.get(CSVHeader.ERpos.value, -1)),
@@ -62,16 +63,25 @@ class PatientPipeline(object):
                 "Bilateral": int(data.get(CSVHeader.BILATERAL_CANCER.value, -1)),
                 "Laterality": int(data.get(CSVHeader.LATERALITY.value, -1)),
             },
-            "LD": [int(data.get(x.value, -1)) for x in
-                   [CSVHeader.LD_BASELINE, CSVHeader.LD_POST_AC, CSVHeader.LD_INTER_REG, CSVHeader.LD_PRE_SURGERY]],
+            "LD": [
+                int(data.get(x.value, -1))
+                for x in [
+                    CSVHeader.LD_BASELINE,
+                    CSVHeader.LD_POST_AC,
+                    CSVHeader.LD_INTER_REG,
+                    CSVHeader.LD_PRE_SURGERY,
+                ]
+            ],
             "outcome": {
                 "Sstat": int(data.get(CSVHeader.SURVIVAL_INDICATOR.value)),
                 "survival_duration": int(data.get(CSVHeader.SURVIVAL_DURATION.value)),
                 "rfs_ind": int(data.get(CSVHeader.RECURRENCE_FREE_INDICATOR.value)),
                 "rfs_duration": int(data.get(CSVHeader.RECURRENCE_FREE_DURATION.value)),
-                "pCR": int(data.get(CSVHeader.PATHOLOGICAL_COMPLETE_RESPONSE.value, -1)),
+                "pCR": int(
+                    data.get(CSVHeader.PATHOLOGICAL_COMPLETE_RESPONSE.value, -1)
+                ),
                 "RCB": int(data.get(CSVHeader.RESIDUAL_CANCER_BURDEN_CLASS.value, -1)),
-            }
+            },
         }
 
     def get_all_patients(self) -> PCollection:
@@ -85,17 +95,16 @@ class PatientPipeline(object):
 
         # Both of these create PCollections with iterators that __next__() -> List[str]
 
-        outcomes_data = (
-                self.load_csv(self.settings[constants.PATIENT_OUTCOME_CSV_FILE_KEY])
-                | "Parse Outcomes' Patient ID" >> beam.Map(lambda x: (x[0], x[1:]))
-        )
-        clinical_data = (
-                self.load_csv(self.settings[constants.PATIENT_CLINICAL_CSV_FILE_KEY])
-                | "Parse Clinical' Patient ID" >> beam.Map(lambda x: (x[0], x[1:]))
-        )
+        outcomes_data = self.load_csv(
+            self.settings[constants.PATIENT_OUTCOME_CSV_FILE_KEY]
+        ) | "Parse Outcomes' Patient ID" >> beam.Map(lambda x: (x[0], x[1:]))
+        clinical_data = self.load_csv(
+            self.settings[constants.PATIENT_CLINICAL_CSV_FILE_KEY]
+        ) | "Parse Clinical' Patient ID" >> beam.Map(lambda x: (x[0], x[1:]))
         return (
-                {"outcomes": outcomes_data, "clinical": clinical_data} | "Combine outcomes & clinical" >> beam.CoGroupByKey()
-                | "Flatten outcomes & clinical" >> beam.Map(self.flatten_patient_data)
+            {"outcomes": outcomes_data, "clinical": clinical_data}
+            | "Combine outcomes & clinical" >> beam.CoGroupByKey()
+            | "Flatten outcomes & clinical" >> beam.Map(self.flatten_patient_data)
         )
 
     def load_csv(self, csv_path: str) -> PCollection:
@@ -107,10 +116,13 @@ class PatientPipeline(object):
         Returns:
             A PCollection whereby each element is a row from the CSV with type, List[str].
         """
-        return (self.pipeline
-                | f"Read CSV: {csv_path}" >> beam.io.ReadFromText(csv_path, skip_header_lines=1)
-                | f"Split CSV: {csv_path}" >> beam.Map(lambda x: x.split(constants.CSV_DELIMETER))
-                )
+        return (
+            self.pipeline
+            | f"Read CSV: {csv_path}"
+            >> beam.io.ReadFromText(csv_path, skip_header_lines=1)
+            | f"Split CSV: {csv_path}"
+            >> beam.Map(lambda x: x.split(constants.CSV_DELIMETER))
+        )
 
     def flatten_patient_data(self, patient):
         """ Flattens a CoGroupByKey.
@@ -129,10 +141,12 @@ def construct_patient_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pip
     """ Runs a manual test of the Patient Pipeline. Merely prints each element to STDOUT.
     """
     output_patient_pipeline = PatientPipeline(p, vars(parsed_args)).construct()
-    _ = output_patient_pipeline | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
+    _ = output_patient_pipeline | "Print Results" >> beam.Map(
+        lambda x: print(f"Element: {str(x)}")
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if "--test" in sys.argv:
         run_pipeline(sys.argv, construct_patient_test_pipeline)
 
