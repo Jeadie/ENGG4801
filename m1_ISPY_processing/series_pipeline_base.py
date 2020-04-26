@@ -142,11 +142,12 @@ class BaseSeriesPipeline(object):
         # Convert list of dictionaries into dictionary of lists (key -> List[values])
         metadata = {k: self.simplify_values(dicom_metadata, k) for k in keys}
         return {
-            "time": metadata.get("Clinical Trial Time Point ID", -1),
+            "time": metadata.get("Clinical Trial Time Point ID", "t-1"),
             "flags": self.filter.get_series_flags(
                 metadata.get("Series Description", "")
             ),
             "Study Instance UID": metadata.get("Study Instance UID", ""),
+            "Series Instance UID": metadata.get("Series Instance UID", ""),
             "Clinical Trial Subject ID": metadata.get(
                 "Clinical Trial Subject ID", "UNKNOWN"
             ),

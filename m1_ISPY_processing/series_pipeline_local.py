@@ -66,7 +66,6 @@ class LocalSeriesPipeline(BaseSeriesPipeline):
                 )
             )
         )
-
         return series_path
 
 

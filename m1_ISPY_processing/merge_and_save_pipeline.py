@@ -73,17 +73,15 @@ class MergeSavePipeline(object):
         """
         data = patient_data[1]
         patient = data["patient"][0]
-        # studies = data["studies"][0]
-        features, feature_list = convert_patient_to_feature(patient)
-        # features["studies"] = {}
-        # for study_id, study in studies:
-        #     features["studies"][study_id] = convert_study_to_feature(study)
+        studies = data["studies"][0]
+        features = convert_patient_to_feature(patient)
+        for study_id, study in studies:
+            study_data  = convert_study_to_feature(study)
+            for feature in study_data:
+                features.update(feature)
 
-        print(features.keys())
-        print(feature_list)
-        return tf.train.SequenceExample(
-            context=tf.train.Features(feature=features),
-            feature_lists=tf.train.FeatureLists(feature_list=feature_list),
+        return tf.train.Example(
+            features=tf.train.Features(feature=features),
         )
 
 
@@ -96,35 +94,37 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
     Returns:
     """
     image, metadata = series
-
-    return {
-        "image": int64List_feature(image.flatten().tolist()),
-        "dx": float_feature(metadata.get("Pixel Spacing")[0]),
-        "dy": float_feature(metadata.get("Pixel Spacing")[1]),
-        "dz": float_feature(metadata.get("Spacing Between Slices")),
-        "is_seg": int64_feature(int(metadata.get("Modality") == "SEG")),
-        "time": int64_feature(int(metadata.get("Clinical Trial Time Point ID")[1])),
-        "right": int64_feature(int(metadata.get("Laterality") == "R")),
-    }
+    if metadata.get("flags") and metadata.get("time"):
+        name = f"time{metadata.get('time')[1:]}/{'_'.join(metadata.get('flags'))}/"
+    else:
+        name = f"{metadata.get('Study Instance UID')}/{metadata.get('Series Instance UID')}/"
+    return dict([(f"{name}{k}", v) for (k, v) in {
+            "image": int64List_feature(image.flatten().tolist()),
+            "dx": float_feature(metadata.get("Pixel Spacing")[0]),
+            "dy": float_feature(metadata.get("Pixel Spacing")[1]),
+            "dz": float_feature(metadata.get("Spacing Between Slices")),
+            "is_seg": int64_feature(int(metadata.get("Modality") == "SEG")),
+            "right": int64_feature(int(metadata.get("Laterality") == "R")),
+            "shape": int64List_feature(image.shape),
+        }.items()])
 
 
 def convert_study_to_feature(study: List[Types.SeriesObj]):
-    return dict(
-        [(s[1]["Series Instance UID"], convert_series_to_feature(s)) for s in study]
-    )
+    return [convert_series_to_feature(s) for s in study]
 
 
 def convert_patient_to_feature(
     patient_data: Dict[str, object]
-) -> Tuple[Dict[str, tf.train.Feature], Dict[str, tf.train.FeatureList]]:
+) -> Dict[str, tf.train.Feature]:
     """
 
     Args:
         patient_data:
     Returns:
-        A tuple consisting of the features, and feature lists.
+        Features to include specific to the patient.
     """
-    features = {
+    # TODO: Maybe prefix with "patient/" for post processing ease.
+    return {
         "patient_id": int64_feature(patient_data.get("patient_id")),
         "age": float_feature(patient_data.get("demographic_metadata").get("age")),
         "race": int64_feature(patient_data.get("demographic_metadata").get("race")),
@@ -148,10 +148,6 @@ def convert_patient_to_feature(
         "rfs_duration": int64_feature(patient_data.get("outcome").get("rfs_duration")),
         "pCR": int64_feature(patient_data.get("outcome").get("pCR")),
         "RCB": int64_feature(patient_data.get("outcome").get("RCB")),
+        "LD": int64List_feature(patient_data.get("LD"))
+
     }
-    feature_lists = {
-        "LD": tf.train.FeatureList(
-            feature=[int64_feature(x) for x in patient_data.get("LD")]
-        )
-    }
-    return (features, feature_lists)
