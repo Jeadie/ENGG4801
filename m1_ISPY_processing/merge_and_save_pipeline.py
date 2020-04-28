@@ -62,21 +62,21 @@ class MergeSavePipeline(object):
     @staticmethod
     def convert_to_tf_example(
         patient_data: Tuple[str, Dict[str, object]]
-    ) -> tf.train.SequenceExample:
+    ) -> tf.train.Example:
         """ Converts an element from the combined patient+study PCollection into a TF Example.
 
         Args:
             patient_data: A single patient's data with clinical, outcome and imaging data.
 
         Returns:
-            An
+            An Example ready to be serialised and saved out of memory (as a TFRecord generally)
         """
         data = patient_data[1]
         patient = data["patient"][0]
         studies = data["studies"][0]
         features = convert_patient_to_feature(patient)
         for study_id, study in studies:
-            study_data  = convert_study_to_feature(study)
+            study_data = convert_study_to_feature(study)
             for feature in study_data:
                 features.update(feature)
 
@@ -86,12 +86,16 @@ class MergeSavePipeline(object):
 
 
 def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Feature]:
-    """ Converts a single SeriesObj for use as a Feature.
+    """ Converts a single SeriesObj to a feature dictionary.
 
     Args:
-        series:
+        series: A series object. Expected keys in Metadata are:
+            "Pixel Spacing", "Spacing Between Slices", "Modality", "Laterality",
+            and either "time" and "flag"
+                or "Series Instance UID" and "Study Instance UID"
 
     Returns:
+        A feature dictionary for a single Series.
     """
     image, metadata = series
     if metadata.get("flags") and metadata.get("time"):
@@ -109,17 +113,27 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
         }.items()])
 
 
-def convert_study_to_feature(study: List[Types.SeriesObj]):
+def convert_study_to_feature(study: List[Types.SeriesObj]) -> List[Dict[str, tf.train.Feature]]:
+    """ Convert a single Study (parsed differently to a Types.StudyObj) into a list of
+        feature dictionaries, each corresponding to a single Series.
+
+    Args:
+        Study: A list of Series objects.
+
+    Returns:
+        A list of Series feature dictionaries.
+    """
     return [convert_series_to_feature(s) for s in study]
 
 
 def convert_patient_to_feature(
     patient_data: Dict[str, object]
 ) -> Dict[str, tf.train.Feature]:
-    """
+    """ Converts a patient's metadata to a Tensorflow feature dictionary.
 
     Args:
-        patient_data:
+        patient_data: Relevant patient metadata.
+
     Returns:
         Features to include specific to the patient.
     """

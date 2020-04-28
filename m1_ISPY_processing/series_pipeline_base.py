@@ -163,8 +163,6 @@ class BaseSeriesPipeline(object):
             values = list(set([tuple(d[k]) for d in dicom_metadata if d.get(k)]))
         else:
             values = list(set([d[k] for d in dicom_metadata if d.get(k)]))
-        if len(values) > 1:
-            print(f"multiple uniq values for key: {k}, values: {values}")
         if len(values) == 0:
             return ""
         return values[0]
