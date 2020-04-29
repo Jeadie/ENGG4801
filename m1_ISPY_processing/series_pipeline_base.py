@@ -29,7 +29,7 @@ class BaseSeriesPipeline(object):
         """
         self.pipeline = main_pipeline
         self.settings = argv
-        self.filter = SeriesFilter()
+        self.filter = SeriesFilter(filter_file = self.settings[constants.SERIES_DESCRIPTION_PATH])
 
     def construct(self) -> PCollection:
         """ The patient Pipeline as documented.
@@ -44,14 +44,12 @@ class BaseSeriesPipeline(object):
             | "Parse and convert Series DICOMS" >> beam.Map(self.convert_series)
             | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
         )
-        _ = (
-            converted_series
-            | "Get Metadata from Series" >> beam.Map(lambda x: x[0])
-            # | "Save Metadata to Disk" >> self.process_series_distribution
-        )
-        return converted_series | "Get Series Object from Series" >> beam.Map(
-            lambda x: x[-1]
-        )
+        # _ = (
+        #     # metadata
+        #     # | "Get Metadata from Series" >> beam.Map(lambda x: x[0])
+        #     # | "Save Metadata to Disk" >> self.process_series_distribution
+        # )
+        return converted_series
 
     # TODO: This should be done in this class
     def process_series_distribution(self, dist: Dict[str, str]) -> None:
@@ -61,7 +59,7 @@ class BaseSeriesPipeline(object):
         """
         return None
 
-    def convert_series(self, series_path: str) -> Tuple[Types.SeriesObj, int]:
+    def convert_series(self, series_path: str) -> Types.SeriesObj:
         """ Parse a set of DICOMs of a given series, parses out DICOM tags as metadata and
             converts the image to Numpy.
 
@@ -77,7 +75,6 @@ class BaseSeriesPipeline(object):
             if len(dicoms) == 0:
                 return None
 
-            meta = self.construct_metadata([d[-1] for d in dicoms])
             series = self.construct_series(dicoms)
 
         except DICOMAccessError:
@@ -89,8 +86,11 @@ class BaseSeriesPipeline(object):
             error_msg = "Could not construct metadata for series."
         except SeriesConstructionError as e:
             error_msg = f"Could not construct series from Dicom. Error: {e}."
+        except Exception as e:
+            error_msg = f"Unknown Error occurred. Error: {e}. Please rerun."
+
         else:
-            return (meta, series)
+            return series
 
         # On exception, log and return None (which will be filtered out)
         print(
@@ -106,6 +106,8 @@ class BaseSeriesPipeline(object):
 
         Returns:
             A list of Series Objects, each with one DICOM in their Series.
+        Raises:
+            DICOMAccessError: If an error occurs when attempting to get the DICOMs for the particular Series.
         """
         raise NotImplementedError(
             "Base Class, `BaseSeriesPipeline` does not implement `convert_series`"
@@ -120,18 +122,28 @@ class BaseSeriesPipeline(object):
 
         Returns:
             A single SeriesObj
+        Raises:
+            SeriesConstructionError: If the imaging and metadata for a series could not be constructed.
         """
-        image = np.stack([d[0] for d in dicoms])
-        metadata = self.construct_metadata([d[-1] for d in dicoms])
-        return (image, metadata)
+        try:
+            image = np.stack([d[0] for d in dicoms])
+            metadata = self.construct_metadata([d[-1] for d in dicoms])
+            return (image, metadata)
+        except Exception as e:
+            print()
+            raise SeriesConstructionError
 
     def construct_metadata(
         self, dicom_metadata: List[Dict[str, object]]
     ) -> Dict[str, object]:
-        """
+        """ Constructs the necessary Metadata from a list of DICOM metadata (converted to Pythonic types)
 
-        :param dicom_metadata:
-        :return:
+        Args:
+            dicom_metadata: A list of metadata from raw DICOMs. Metadata has
+                been converted to pythonic types not dicom.valuerep types.
+
+        Returns:
+             A formatted metadata dictonary relevant to the Series as a whole.
         """
         # Get the union of keys from all DICOMs
         keys = reduce(
@@ -159,13 +171,17 @@ class BaseSeriesPipeline(object):
         # return metadata
 
     def simplify_values(self, dicom_metadata, k):
-        if type(dicom_metadata[0][k]) == list:
-            values = list(set([tuple(d[k]) for d in dicom_metadata if d.get(k)]))
-        else:
-            values = list(set([d[k] for d in dicom_metadata if d.get(k)]))
-        if len(values) == 0:
+        try:
+            if type(dicom_metadata[0][k]) == list:
+                values = list(set([tuple(d[k]) for d in dicom_metadata if d.get(k)]))
+            else:
+                values = list(set([d[k] for d in dicom_metadata if d.get(k)]))
+            if len(values) == 0:
+                return ""
+            return values[0]
+        except Exception as e:
+            print("f Error simplifying dicom metadata: {[d.get(k, '') for d in dicom_metadata]}.")
             return ""
-        return values[0]
 
     def process_local_DICOM(self, path: str) -> Tuple[np.array, Dict[str, object]]:
         """ Processes a locally saved, unopen DICOM file.

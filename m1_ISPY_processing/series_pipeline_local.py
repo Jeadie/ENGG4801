@@ -9,6 +9,7 @@ from apache_beam.pvalue import PCollection
 
 import constants
 from series_pipeline_base import BaseSeriesPipeline
+from custom_exceptions import DICOMAccessError
 from custom_types import Types
 import util
 
@@ -31,13 +32,19 @@ class LocalSeriesPipeline(BaseSeriesPipeline):
 
         Returns:
             A list of Series Objects, each with one DICOM in their Series.
+        Raises:
+            DICOMAccessError: If an error occurs when attempting to get the DICOMs for the particular Series.
         """
-        dicoms = []
-        for dicom in list(filter(lambda x: ".dcm" in x, os.listdir(series_path))):
-            d = self.process_local_DICOM(f"{series_path}{dicom}")
-            dicoms.append(d)
+        try:
+            dicoms = []
+            for dicom in list(filter(lambda x: ".dcm" in x, os.listdir(series_path))):
+                d = self.process_local_DICOM(f"{series_path}{dicom}")
+                dicoms.append(d)
 
-        return dicoms
+            return dicoms
+        except Exception as e:
+            print(f"An error occurred when acquiring Dicom's for {series_path}. Error: {e}. Must rerun to acquire data.")
+            raise DICOMAccessError()
 
     def get_all_series(self) -> PCollection[str]:
         """ Gets the path to all the Series in the dataset.

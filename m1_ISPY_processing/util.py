@@ -53,6 +53,7 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
         dest=constants.SERIES_LIMIT,
         type=int,
         help="Number of series to process in total.",
+        default=None # Bigquery specific value
     )
     parser.add_argument(
         f"--{constants.TFRECORD_NAME.replace('_', '-')}",
@@ -70,7 +71,13 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
         help="Number of shards to save the TFRecord into.",
         default=1,
     )
-
+    parser.add_argument(
+        f"--{constants.SERIES_DESCRIPTION_PATH.replace('_', '-')}",
+        dest=constants.SERIES_DESCRIPTION_PATH,
+        type=str,
+        help="The path to the series description CSV.",
+        default="ISPY1_MetaData.csv"
+    )
     known_args, pipeline_args = parser.parse_known_args(argv)
     return known_args, pipeline_args
 
@@ -110,17 +117,21 @@ def construct_metadata_from_DICOM_dictionary(
     """
     d = {}
     for element in dicom.values():
-        if element.tag == constants.DICOM_PIXEL_TAG:
-            continue
+        try:
+            if element.tag == constants.DICOM_PIXEL_TAG:
+                continue
 
-        # Convert RawDataElement
-        if type(element.value) in constants.DICOM_SPECIFIC_TYPES:
-            # Convert DICOM type to Python type with function lookup table.
-            d[element.description()] = constants.DICOM_TYPE_CONVERSION[
-                type(element.value)
-            ](element.value)
-        else:
-            d[element.description()] = element.value
+            # Convert RawDataElement
+            if type(element.value) in constants.DICOM_SPECIFIC_TYPES:
+                # Convert DICOM type to Python type with function lookup table.
+                d[element.description()] = constants.DICOM_TYPE_CONVERSION[
+                    type(element.value)
+                ](element.value)
+            else:
+                d[element.description()] = element.value
+        except (KeyError, TypeError):
+            # Just don't include problematic key-values
+            continue
     return d
 
 

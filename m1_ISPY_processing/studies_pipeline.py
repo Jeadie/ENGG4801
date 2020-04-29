@@ -29,7 +29,7 @@ class StudiesPipeline(object):
         group_by_patients = (
             self.series
             | "Parse out Study ID from each Series Obj"
-            >> beam.Map(lambda x: (x[1].pop("Study Instance UID"), x))
+            >> beam.Map(lambda x: (x[1].get("Study Instance UID"), x))
             | "Group by Study ID" >> beam.GroupByKey()
             | "Parse out Patient ID" >> beam.Map(self.parse_patient_from_study)
             | "Group by Patient ID" >> beam.GroupByKey()
@@ -53,7 +53,7 @@ class StudiesPipeline(object):
         return (study[1][0][1].pop("Clinical Trial Subject ID"), study)
 
 
-def construct_studies_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
+def construct_studies_test_pipeline(parsed_args: argparse.Namespace,   p: beam.Pipeline):
     """ Runs a manual test of the Series Pipeline.
     """
     args = vars(parsed_args)

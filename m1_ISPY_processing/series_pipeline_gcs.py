@@ -9,6 +9,7 @@ from google.cloud import bigquery, storage
 
 import constants
 from series_pipeline_base import BaseSeriesPipeline
+from custom_exceptions import DICOMAccessError
 from custom_types import Types
 import util
 
@@ -31,20 +32,26 @@ class GCSSeriesPipeline(BaseSeriesPipeline):
 
         Returns:
             A list of Series Objects, each with one DICOM in their Series.
+        Raises:
+            DICOMAccessError: If an error occurs when attempting to get the DICOMs for the particular Series.
         """
-        dicoms = []
-        c = storage.Client()
-        bucket, prefix = util.parse_gcs_path(series_path)
-        # make temp directory
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            # Download DICOMS to temp directory
-            for dicom in c.list_blobs(bucket, prefix=prefix):
-                relative_name = dicom.name.split("/")[-1]
-                dicom.download_to_filename(f"{tmp_dir}/{relative_name}")
-                d = self.process_local_DICOM(f"{tmp_dir}/{relative_name}")
-                dicoms.append(d)
+        try:
+            dicoms = []
+            c = storage.Client()
+            bucket, prefix = util.parse_gcs_path(series_path)
+            # make temp directory
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                # Download DICOMS to temp directory
+                for dicom in c.list_blobs(bucket, prefix=prefix):
+                    relative_name = dicom.name.split("/")[-1]
+                    dicom.download_to_filename(f"{tmp_dir}/{relative_name}")
+                    d = self.process_local_DICOM(f"{tmp_dir}/{relative_name}")
+                    dicoms.append(d)
 
-        return dicoms
+            return dicoms
+        except Exception as e:
+            print(f"An error occurred when acquiring Dicom's for {series_path}. Error: {e}. Must rerun to acquire data.")
+            raise DICOMAccessError()
 
     def get_all_series(self) -> PCollection[str]:
         """ Gets the path to all the Series in the dataset.

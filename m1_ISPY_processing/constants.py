@@ -14,7 +14,7 @@ STUDIES_PATH = "studies_dir"
 SERIES_LIMIT = "num-series"
 TFRECORD_NAME = "tfrecord_name"
 NUM_TFRECORD_SHARDS = "num_shards"
-
+SERIES_DESCRIPTION_PATH="series_descriptions"
 ####################################
 # MERGE+SAVE PIPELINE CONSTANTS ##
 ####################################

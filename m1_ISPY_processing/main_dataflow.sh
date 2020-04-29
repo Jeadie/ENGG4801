@@ -6,7 +6,7 @@ PROJECT="long-loop-273905"
 REGION="us-central1"
 export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/gcp-key.json"
 
-
+#TODO: upload csvs to GCS 
 # Run command
 python main.py  \
     --runner=DataflowRunner \
@@ -17,3 +17,4 @@ python main.py  \
     --patient-clinical="gs://ispy_dataquery/clinical.csv" \
     --project="$PROJECT" \
     --patient-outcomes="gs://ispy_dataquery/outcome.csv" \
+    --temp_location="gs://ispy_dataquery/temp/" \

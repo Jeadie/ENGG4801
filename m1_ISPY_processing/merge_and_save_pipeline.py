@@ -6,7 +6,12 @@ import tensorflow as tf
 
 import constants
 from custom_types import Types
-from util_tensorflow import int64_feature, float_feature, int64List_feature
+from util_tensorflow import (
+    bytes_feature,
+    int64_feature,
+    float_feature,
+    int64List_feature
+)
 
 
 class MergeSavePipeline(object):
@@ -71,19 +76,23 @@ class MergeSavePipeline(object):
         Returns:
             An Example ready to be serialised and saved out of memory (as a TFRecord generally)
         """
-        data = patient_data[1]
-        patient = data["patient"][0]
-        studies = data["studies"][0]
-        features = convert_patient_to_feature(patient)
-        for study_id, study in studies:
-            study_data = convert_study_to_feature(study)
-            for feature in study_data:
-                features.update(feature)
-
-        return tf.train.Example(
-            features=tf.train.Features(feature=features),
-        )
-
+        try:
+            data = patient_data[1]
+            patient = data["patient"][0]
+            studies = data["studies"][0]
+            features = convert_patient_to_feature(patient)
+            for study_id, study in studies:
+                study_data = convert_study_to_feature(study)
+                for feature in study_data:
+                    features.update(feature)
+            return tf.train.Example(
+                features=tf.train.Features(feature=features),
+            )
+        except Exception as e:
+            print(f"Error occurred when creating a TFRecord. patient_data: {data.get('patient', data)}. Error: {e}.")
+            return tf.train.Example(
+                features=tf.train.Features(feature={}),
+            )
 
 def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Feature]:
     """ Converts a single SeriesObj to a feature dictionary.
@@ -98,10 +107,12 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
         A feature dictionary for a single Series.
     """
     image, metadata = series
+    dicom_id = f"{metadata.get('Study Instance UID', 'unknown_study')}/{metadata.get('Series Instance UID', 'unknown_series')}/"
+
     if metadata.get("flags") and metadata.get("time"):
         name = f"time{metadata.get('time')[1:]}/{'_'.join(metadata.get('flags'))}/"
     else:
-        name = f"{metadata.get('Study Instance UID')}/{metadata.get('Series Instance UID')}/"
+        name = dicom_id
     return dict([(f"{name}{k}", v) for (k, v) in {
             "image": int64List_feature(image.flatten().tolist()),
             "dx": float_feature(metadata.get("Pixel Spacing")[0]),
@@ -110,6 +121,7 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
             "is_seg": int64_feature(int(metadata.get("Modality") == "SEG")),
             "right": int64_feature(int(metadata.get("Laterality") == "R")),
             "shape": int64List_feature(image.shape),
+            "dicom_id": bytes_feature(dicom_id.encode())
         }.items()])
 
 
