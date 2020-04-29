@@ -1,5 +1,6 @@
 pyarrow<0.16
 apache-beam<2.18
+google-resumable-media==0.5.0
 black
 flake8
 google-cloud-storage
@@ -10,3 +11,5 @@ tfx
 tensorflow
 tensorflow-datasets
 pandas
+gcsfs
+apache-beam[gcp]

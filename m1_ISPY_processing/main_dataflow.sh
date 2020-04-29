@@ -11,10 +11,12 @@ export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/gcp-key.json"
 python main.py  \
     --runner=DataflowRunner \
     --region $REGION \
+    --num-series=4 \
     --studies-dir="gs://ispy_dataquery/dicoms/" \
     --tfrecord-name="gs://ispy_dataquery/result" \
     --num-shards=2 \
-    --patient-clinical="gs://ispy_dataquery/clinical.csv" \
+    --patient-clinical="clinical.csv" \
+    --series-descriptions="gs://ispy_dataquery/ISPY1_MetaData.csv" \
     --project="$PROJECT" \
-    --patient-outcomes="gs://ispy_dataquery/outcome.csv" \
+    --patient-outcomes="outcome.csv" \
     --temp_location="gs://ispy_dataquery/temp/" \

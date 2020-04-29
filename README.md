@@ -14,6 +14,10 @@ ENGG4801
 └───m1_ISPY_processing/
 │   │  ...
 │   └── README.md
+│
+└───m2_ISPY_VGG/
+│   │  ...
+│   └── README.md
 │   
 └──shared/
    |  ...
@@ -21,5 +25,6 @@ ENGG4801
 
 ```
 Where:
-*  m1_ISPY_processing: Is responsible for parsing the [TCIA ISPY](https://wiki.cancerimagingarchive.net/display/Public/ISPY1) dataset from GCPs HealthCare API collection (see [dataset](https://cloud.google.com/healthcare/docs/resources/public-datasets/tcia-attribution/ispy1)), converting to appropriate TFRecord and distribution metadata, and egressing to AWS storage for training. 
+*  `m1_ISPY_processing`: Is responsible for parsing the [TCIA ISPY](https://wiki.cancerimagingarchive.net/display/Public/ISPY1) dataset from GCPs HealthCare API collection (see [dataset](https://cloud.google.com/healthcare/docs/resources/public-datasets/tcia-attribution/ispy1)), converting to appropriate TFRecord and distribution metadata, and egressing to AWS storage for training. 
+* `m2_ISPY_VGG`: Is responsible for reproducing the results of a paper that trained a VGG model on the ISPY1 dataset to predict NAC response (see Notion Documentation for details).
 * shared: contains shared code used throughout the repo.  
