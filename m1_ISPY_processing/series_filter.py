@@ -48,10 +48,6 @@ class SeriesFilter(object):
         "BRSTCA SENSFS3DSAG 6DYN": ["MRI", "SAG"],
         "NCI/HIGH_RES_SAG": ["MRI", "SAG"],
         "ACRIN_6657/LEFTFL3D_T1_SAG": ["MRI", "FL3D", "T1", "SAG", "LEFT"],
-
-        # TODO: remove, just for testing.
-        "5": ["MRI", "FL3D", "T1", "SAG", "LEFT"],
-        'LOC.-T1-Axial-Both Breast': ["MRI", "T1", "AXIAL"]
     }
     USED_SEG = {
         "Breast Tissue Segmentation": ["Tissue", "SEG"],
