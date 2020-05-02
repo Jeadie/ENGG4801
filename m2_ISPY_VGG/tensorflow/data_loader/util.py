@@ -55,11 +55,7 @@ def get_images(raw_example: tf.Tensor) -> Tuple[Dict[str, int], List[Tuple[str, 
                 k.replace("image", "shape"): tf.io.VarLenFeature(tf.int64),
             }
             example = tf.io.parse_example(raw_example, features)
-
-            shape = list(example[k.replace("image", "shape")].values.numpy())
-            # Remove unnecessary dimensions of length 1.
-            shape = list(filter(lambda x: x != 1, shape))
-            images.append((k, tf.reshape(example[k].values, shape)))
+            images.append((k, reconstruct_image(example[k], example[k.replace("image", "shape")])))
 
         except tf.errors.InvalidArgumentError as e:
             _logger.error(
@@ -69,3 +65,17 @@ def get_images(raw_example: tf.Tensor) -> Tuple[Dict[str, int], List[Tuple[str, 
             continue
 
     return (patient_details, images)
+
+
+def reconstruct_image(image: tf.Tensor, shape: tf.Tensor) -> tf.Tensor:
+    """ Reconstructs a 3D image feature from a parsed_example that has undefined shape.
+
+    Args:
+        image: An eager tensor of a dimensionless image.
+        shape: An eager tensor of the images shape. (i.e can be three of four dimensions)
+
+    Returns:
+         A 3D image feature with its original shape reapplied.
+    """
+    shape = list(filter(lambda x: x != 1, list(shape.values.numpy())))
+    return tf.reshape(image.values, shape)

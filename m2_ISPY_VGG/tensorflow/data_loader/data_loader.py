@@ -3,9 +3,9 @@ import tensorflow as tf
 import multiprocessing
 from typing import Tuple, Dict
 import random
+import data_loader.util as util
 
-
-class TFRecordDataLoader(DataLoader):
+class TFRecordShardLoader(DataLoader):
     def __init__(self, config: dict, mode: str) -> None:
         """
         An example of how to create a dataset using tfrecords inputs
@@ -61,28 +61,40 @@ class TFRecordDataLoader(DataLoader):
         """
         # do parsing on the cpu
         with tf.device("/cpu:0"):
-            # define input shapes
-            # TODO: update this for your data set
             features = {
-                "image": tf.FixedLenFeature(shape=[28, 28, 1], dtype=tf.float32),
-                "label": tf.FixedLenFeature(shape=[1], dtype=tf.int64),
+                "mri/shape": tf.io.VarLenFeature(tf.float32),
+                "mri/image": tf.io.VarLenFeature(tf.float32),
+                "group": tf.io.FixedLenFeature(shape=[1], dtype=tf.int64),
             }
             example = tf.parse_single_example(example, features=features)
+            image = util.reconstruct_image(features["mri/shape"], features["mri/image"])
+            image = self._normalise(image)
+            # # only augment training data
+            # if self.mode == "train":
+            #     input_data = self._augment(example["image"])
+            # else:
+            #     input_data = example["image"]
 
-            # only augment training data
-            if self.mode == "train":
-                input_data = self._augment(example["image"])
-            else:
-                input_data = example["image"]
+            return {"input": image}, example["group"]
 
-            return {"input": input_data}, example["label"]
+    @staticmethod
+    def _normalise(example: tf.Tensor) -> tf.Tensor:
+        """ Normalise a 3D image as
+
+        Args:
+            example:
+        :return:
+        """
+        return example
 
     @staticmethod
     def _augment(example: tf.Tensor) -> tf.Tensor:
         """
         Randomly augment the input image to try improve training variance
-        :param example: parsed input example
-        :return: the same input example but possibly augmented
+        Args:
+            example: parsed input example
+        Returns:
+            The same input example but possibly augmented
         """
         # random rotation
         if random.uniform(0, 1) > 0.5:
@@ -107,5 +119,5 @@ class TFRecordDataLoader(DataLoader):
         :return: number of samples in all tfrecord files
         """
         return sum(
-            1 for fn in self.file_names for _ in tf.python_io.tf_record_iterator(fn)
+            1 for fn in self.file_names for _ in tf.compat.v1.python_io.tf_record_iterator(fn)
         )

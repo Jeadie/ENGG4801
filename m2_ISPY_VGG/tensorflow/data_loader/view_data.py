@@ -46,7 +46,7 @@ def visualise_image(name: str, image: np.array) -> None:
     for j in range(image.shape[0]):
         plt.imshow(image[j, ...], cmap="gray")
         plt.title(f"Name of series: {name}")
-        plt.pause(0.005)
+        plt.pause(0.001)
     plt.show()
 
 

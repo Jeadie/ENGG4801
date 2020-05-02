@@ -3,7 +3,7 @@ import logging
 
 import tensorflow as tf
 
-from util import get_images, int64List_feature
+import data_loader.util import get_images, int64List_feature
 
 _logger = logging.getLogger("Simplify Data")
 
