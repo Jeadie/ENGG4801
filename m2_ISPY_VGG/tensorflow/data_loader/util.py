@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 import logging
 
 import numpy as np
@@ -12,6 +12,13 @@ def int64List_feature(value: List[int]) -> tf.train.Feature:
         """
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
+def bytes_feature(value: Union[bytes, str]) -> tf.train.Feature:
+    """ Converts a byte or string data type into a bytes_list Tensorflow feature.
+    """
+    # If the value is an eager tensor BytesList won't unpack a string from an EagerTensor.
+    if isinstance(value, type(tf.constant(0))):
+        value = value.numpy()
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 def get_images(raw_example: tf.Tensor) -> Tuple[Dict[str, int], List[Tuple[str, np.array]]]:
     """ Parses a single Patient proto from a TFRecord and retrieves specific
@@ -53,9 +60,24 @@ def get_images(raw_example: tf.Tensor) -> Tuple[Dict[str, int], List[Tuple[str, 
             features = {
                 k: tf.io.VarLenFeature(tf.int64),
                 k.replace("image", "shape"): tf.io.VarLenFeature(tf.int64),
+                k.replace("image", "dx"): tf.io.FixedLenFeature((1), float),
+                k.replace("image", "dy"): tf.io.FixedLenFeature((1), float),
+                k.replace("image", "dz"): tf.io.FixedLenFeature((1), float),
+                k.replace("image", "is_seg"): tf.io.FixedLenFeature((1), tf.int64),
+                k.replace("image", "right"): tf.io.FixedLenFeature((1), tf.int64),
             }
             example = tf.io.parse_example(raw_example, features)
-            images.append((k, reconstruct_image(example[k], example[k.replace("image", "shape")])))
+
+            print(k)
+            for i in ["dx", "dy", "dz", "is_seg", "right"]:
+                print( i, example[k.replace("image", i)].numpy())
+            print()
+
+
+            print(type(example[k].values))
+            images.append((k, tf.py_function(
+                reconstruct_image,
+                (example[k].values, example[k.replace("image", "shape")].values), tf.int64))) #reconstruct_image(example[k], example[k.replace("image", "shape")])))
 
         except tf.errors.InvalidArgumentError as e:
             _logger.error(
@@ -77,5 +99,39 @@ def reconstruct_image(image: tf.Tensor, shape: tf.Tensor) -> tf.Tensor:
     Returns:
          A 3D image feature with its original shape reapplied.
     """
-    shape = list(filter(lambda x: x != 1, list(shape.values.numpy())))
-    return tf.reshape(image.values, shape)
+    # return tf.reshape(image.values, (-1, 256, 256))
+
+    shape = list(filter(lambda x: x != 1, list(shape.numpy())))
+    print("INSIDE", shape, image)
+    return tf.reshape(image, shape)
+
+
+def calculate_group_from_results(pCR: int, RCB: int) -> int:
+    """ Calculates the response group of the patient from their pCR and RCB result.
+
+    Args:
+        pCR: Boolean integer of whether the patient had a complete response to NAC.
+        RCB: The residual cancer burden of the patient. [0, 4]
+
+    Returns:
+        The integer, g representing the classification of the patient. 1 <= g <=3.
+    """
+    if pCR:
+        return 1
+    if RCB <= 2:
+        return 2
+    return 3
+
+def required_imaging_series() -> List[str]:
+    """ Returns all the imaging series descriptors that is needed in this model.
+
+    Returns:
+        A list of feature names that should be included from imaging TF.examples.
+    """
+    images = [
+        "time1/MRI_DCE/image",
+        "time1/SEG_VOI/image",
+        "time1/Tissue_SEG/image"
+    ]
+    return images
+    # return images + [image.replace("image", "shape") for image in images]

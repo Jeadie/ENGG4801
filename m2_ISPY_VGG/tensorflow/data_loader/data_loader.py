@@ -5,6 +5,7 @@ from typing import Tuple, Dict
 import random
 import data_loader.util as util
 
+
 class TFRecordShardLoader(DataLoader):
     def __init__(self, config: dict, mode: str) -> None:
         """
@@ -31,20 +32,23 @@ class TFRecordShardLoader(DataLoader):
         reduce bottle necking of operations on the GPU
         :return: a Dataset function
         """
-        dataset = tf.data.TFRecordDataset(self.file_names)
-        # create a parallel parsing function based on number of cpu cores
-        dataset = dataset.map(
+        # for raw in iter(tf.data.TFRecordDataset(self.file_names)):
+        #     patient, images = util.get_images(raw)
+        #     images = dict(images)
+        #     patient["group"] = util.calculate_group_from_results(patient["pCR"], patient["RCB"])
+        #     image = images["time4/SEG_VOI/image"]
+        #     image = tf.expand_dims(image[0, 0:64, 0:64], 0)
+        #     print(tf.one_hot(patient["group"]-1, 3))
+        #     yield tf.expand_dims(image, -1), tf.expand_dims(tf.one_hot(patient["group"]-1, 3), -1)
+
+        dataset = tf.data.TFRecordDataset(self.file_names).map(
             map_func=self._parse_example, num_parallel_calls=multiprocessing.cpu_count()
         )
 
         # only shuffle training data
         if self.mode == "train":
             # shuffles and repeats a Dataset returning a new permutation for each epoch. with serialised compatibility
-            dataset = dataset.apply(
-                tf.contrib.data.shuffle_and_repeat(
-                    buffer_size=len(self) // self.config["train_batch_size"]
-                )
-            )
+            dataset = dataset.shuffle(max(len(self) // self.config["train_batch_size"], 2))
         else:
             dataset = dataset.repeat(self.config["num_epochs"])
         # create batches of data
@@ -52,7 +56,7 @@ class TFRecordShardLoader(DataLoader):
         return dataset
 
     def _parse_example(
-        self, example: tf.Tensor
+        self, _example: tf.Tensor
     ) -> Tuple[Dict[str, tf.Tensor], tf.Tensor]:
         """
         Used to read in a single example from a tf record file and do any augmentations necessary
@@ -62,20 +66,39 @@ class TFRecordShardLoader(DataLoader):
         # do parsing on the cpu
         with tf.device("/cpu:0"):
             features = {
-                "mri/shape": tf.io.VarLenFeature(tf.float32),
-                "mri/image": tf.io.VarLenFeature(tf.float32),
+                "time1/MRI_DCE/image": tf.io.VarLenFeature(tf.int64),
+                "time1/MRI_DCE/shape": tf.io.FixedLenFeature([3], tf.int64),
                 "group": tf.io.FixedLenFeature(shape=[1], dtype=tf.int64),
+                #TODO: parse seg and tissue into 3D matrices too.
+                # TODO: BBOX MRI_DCE
+                # "time1/SEG_VOI/image": tf.io.FixedLenFeature([], tf.int64),
+                # "time1/Tissue_SEG/image": tf.io.FixedLenFeature([], tf.int64),
             }
-            example = tf.parse_single_example(example, features=features)
-            image = util.reconstruct_image(features["mri/shape"], features["mri/image"])
-            image = self._normalise(image)
-            # # only augment training data
-            # if self.mode == "train":
+            example = tf.io.parse_single_example(_example, features)
+            image = tf.py_function(
+                util.reconstruct_image, (example["time1/MRI_DCE/image"].values, example["time1/MRI_DCE/shape"]), tf.int64)
+
+
+            image = tf.reshape(image, example["time1/MRI_DCE/shape"])
+
+            #TODO: This must magically pick a single slice from 3D (eventually will have to pick 64x64 too.
+            image = tf.transpose(image, [2, 1, 0])
+            image = tf.expand_dims(image[..., 0], -1)
+            print("FINAL IAMGE", image)
+            return image, tf.one_hot(example["group"]-1, 3)[0,...]
+            # #
+            # image = util.reconstruct_image(example["time4/SEG_VOI/image"], example["time4/SEG_VOI/shape"])
+            # image = self._normalise(image)
+            # # # only augment training data
+            # # if self.mode == "train":
             #     input_data = self._augment(example["image"])
             # else:
             #     input_data = example["image"]
+            print(repr(example))
+            print(repr(example["time1/MRI_DCE/image"]), example["group"][0])
+            return {"input": example["time1/MRI_DCE/image"][0]}, example["group"][0]
 
-            return {"input": image}, example["group"]
+
 
     @staticmethod
     def _normalise(example: tf.Tensor) -> tf.Tensor:

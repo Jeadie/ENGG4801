@@ -44,24 +44,29 @@ class Trainer(BaseTrain):
         run_config = run_config.replace(model_dir=self.config["job_dir"])
 
         # intialise the estimator with your model
-        estimator = self.model.model()
+        model = self.model.model()
+        dataset = self.train.input_fn()
+        print(dataset)
+        history = model.fit(dataset)
 
-        # create train and eval specs for estimator
-        train_spec = tf.estimator.TrainSpec(
-            lambda: self.train.input_fn(),
-            max_steps=self.config["num_epochs"] * steps_pre_epoch,
-        )
-
-        eval_spec = tf.estimator.EvalSpec(lambda: self.val.input_fn())
-
-        # initialise a wrapper to do training and evaluation, this also handles exporting checkpoints/tensorboard info
-        tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-
-        # after training export the final model for use in tensorflow serving
-        self._export_model(estimator, self.config["export_path"])
-
-        # get results after training and exporting model
-        self._predict(estimator, self.pred.input_fn)
+        print(history)
+        print(history.history)
+        # # create train and eval specs for estimator
+        # train_spec = tf.estimator.TrainSpec(
+        #     lambda: self.train.input_fn(),
+        #     max_steps=self.config["num_epochs"] * steps_pre_epoch,
+        # )
+        #
+        # eval_spec = tf.estimator.EvalSpec(lambda: self.val.input_fn())
+        #
+        # # initialise a wrapper to do training and evaluation, this also handles exporting checkpoints/tensorboard info
+        # tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+        #
+        # # after training export the final model for use in tensorflow serving
+        # self._export_model(estimator, self.config["export_path"])
+        #
+        # # get results after training and exporting model
+        # self._predict(estimator, self.pred.input_fn)
 
     def _export_model(
         self, estimator: tf.estimator.Estimator, save_location: str

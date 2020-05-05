@@ -3,7 +3,13 @@ import logging
 
 import tensorflow as tf
 
-import data_loader.util import get_images, int64List_feature
+from util import (
+    calculate_group_from_results,
+    get_images,
+    bytes_feature,
+    int64List_feature,
+    required_imaging_series
+)
 
 _logger = logging.getLogger("Simplify Data")
 
@@ -74,8 +80,11 @@ def parse_raw(input) -> tf.Tensor:
     for k in patient.keys():
         patient[k] = int64List_feature([patient[k]])
 
-    for k in images.keys():
+    for k in image_keys:
+        images[k.replace("image", "shape")] = int64List_feature(images[k].shape)
+        print(images[k].shape, )
         images[k] = int64List_feature(images[k].numpy().flatten().tolist())
+        # images[k] = bytes_feature(tf.io.serialize_tensor(images[k]).numpy())
 
     patient.update(images)
 
@@ -91,23 +100,12 @@ def get_required_image_keys(keys: List[str]) -> List[str]:
 
     Returns:
     """
-    return keys
+    print(keys, required_imaging_series())
+    if set(required_imaging_series()) <= set(keys):
+        return list(set(keys).intersection(set(required_imaging_series())))
+    else:
+        return []
 
-def calculate_group_from_results(pCR: int, RCB: int) -> int:
-    """ Calculates the response group of the patient from their pCR and RCB result.
-
-    Args:
-        pCR: Boolean integer of whether the patient had a complete response to NAC.
-        RCB: The residual cancer burden of the patient. [0, 4]
-
-    Returns: 
-        The integer, g representing the classification of the patient. 1 <= g <=3.
-    """
-    if pCR:
-        return 1
-    if RCB <= 2:
-        return 2
-    return 3
 
 if __name__ == '__main__':
-    simplify_dataset(["1020_result-00000-of-00001.tfrecords"], "test-out")
+    simplify_dataset(["../data/small_16.tfrecords", "../data/small_17.tfrecords"] , "new-boi") 
