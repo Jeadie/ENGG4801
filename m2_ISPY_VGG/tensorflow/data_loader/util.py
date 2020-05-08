@@ -42,12 +42,22 @@ def get_images(raw_example: tf.Tensor) -> Tuple[Dict[str, int], List[Tuple[str, 
     keys = list(
         filter(lambda x: "/image" in x, dict(string_example.features.feature).keys())
     )
-    patient_features = {
-        "patient_id": tf.io.FixedLenFeature((1), tf.int64),
-        "pCR": tf.io.FixedLenFeature((1), tf.int64),
-        "RCB": tf.io.FixedLenFeature((1), tf.int64),
-    }
-    patient_details = tf.io.parse_example(raw_example, patient_features)
+    try:
+        patient_features = {
+            "patient_id": tf.io.FixedLenFeature((1), tf.int64, default_value=-1),
+            "pCR": tf.io.FixedLenFeature((1), tf.int64, default_value=-1),
+            "RCB": tf.io.FixedLenFeature((1), tf.int64, default_value=-1),
+        }
+        patient_details = tf.io.parse_example(raw_example, patient_features)
+
+        if -1 in [patient_details[value].numpy()[0] for value in ["patient_id", "pCR", "RCB"]]:
+            raise ValueError(f"Did not have correct values: {patient_details}. ")
+
+    except (ValueError, tf.errors.InvalidArgumentError) as e:
+        _logger.error(
+            f"Could not pass patient data. Error: {e}. "
+        )
+        return {}, []
 
     # Convert Features to ints.
     for k in patient_features:
@@ -60,24 +70,16 @@ def get_images(raw_example: tf.Tensor) -> Tuple[Dict[str, int], List[Tuple[str, 
             features = {
                 k: tf.io.VarLenFeature(tf.int64),
                 k.replace("image", "shape"): tf.io.VarLenFeature(tf.int64),
-                k.replace("image", "dx"): tf.io.FixedLenFeature((1), float),
-                k.replace("image", "dy"): tf.io.FixedLenFeature((1), float),
-                k.replace("image", "dz"): tf.io.FixedLenFeature((1), float),
-                k.replace("image", "is_seg"): tf.io.FixedLenFeature((1), tf.int64),
-                k.replace("image", "right"): tf.io.FixedLenFeature((1), tf.int64),
+                k.replace("image", "dx"): tf.io.FixedLenFeature((1), float, default_value=-1),
+                k.replace("image", "dy"): tf.io.FixedLenFeature((1), float, default_value=-1),
+                k.replace("image", "dz"): tf.io.FixedLenFeature((1), float, default_value=-1),
+                k.replace("image", "is_seg"): tf.io.FixedLenFeature((1), tf.int64, default_value=-1),
+                k.replace("image", "right"): tf.io.FixedLenFeature((1), tf.int64, default_value=-1),
             }
             example = tf.io.parse_example(raw_example, features)
-
-            print(k)
-            for i in ["dx", "dy", "dz", "is_seg", "right"]:
-                print( i, example[k.replace("image", i)].numpy())
-            print()
-
-
-            print(type(example[k].values))
             images.append((k, tf.py_function(
                 reconstruct_image,
-                (example[k].values, example[k.replace("image", "shape")].values), tf.int64))) #reconstruct_image(example[k], example[k.replace("image", "shape")])))
+                (example[k].values, example[k.replace("image", "shape")].values), tf.int64)))
 
         except tf.errors.InvalidArgumentError as e:
             _logger.error(
@@ -102,7 +104,6 @@ def reconstruct_image(image: tf.Tensor, shape: tf.Tensor) -> tf.Tensor:
     # return tf.reshape(image.values, (-1, 256, 256))
 
     shape = list(filter(lambda x: x != 1, list(shape.numpy())))
-    print("INSIDE", shape, image)
     return tf.reshape(image, shape)
 
 

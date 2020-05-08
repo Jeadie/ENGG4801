@@ -27,21 +27,21 @@ class Trainer(BaseTrain):
         super().__init__(config, model, train, val, pred)
 
     def run(self) -> None:
-        # allow memory usage to me scaled based on usage
-        config = tf.compat.v1.ConfigProto()
-        config.gpu_options.allow_growth = True
-
-        # get number of steps required for one pass of data
-        steps_pre_epoch = len(self.train) / self.config["train_batch_size"]
-        # save_checkpoints_steps is number of batches before eval
-        run_config = tf.estimator.RunConfig(
-            session_config=config,
-            save_checkpoints_steps=steps_pre_epoch
-            * 10,  # number of batches before eval/checkpoint
-            log_step_count_steps=steps_pre_epoch,  # number of steps in epoch
-        )
-        # set output directory
-        run_config = run_config.replace(model_dir=self.config["job_dir"])
+        # # allow memory usage to me scaled based on usage
+        # config = tf.compat.v1.ConfigProto()
+        # config.gpu_options.allow_growth = True
+        #
+        # # get number of steps required for one pass of data
+        # steps_pre_epoch = len(self.train) / self.config["train_batch_size"]
+        # # save_checkpoints_steps is number of batches before eval
+        # run_config = tf.estimator.RunConfig(
+        #     session_config=config,
+        #     save_checkpoints_steps=steps_pre_epoch
+        #     * 10,  # number of batches before eval/checkpoint
+        #     log_step_count_steps=steps_pre_epoch,  # number of steps in epoch
+        # )
+        # # set output directory
+        # run_config = run_config.replace(model_dir=self.config["job_dir"])
 
         # intialise the estimator with your model
         model = self.model.model()

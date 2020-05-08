@@ -17,7 +17,7 @@ from util import (
 
 _logger = logging.getLogger("Simplify Data")
 
-DEFAULT_OUTPUT_SHARD_SIZE = 20
+DEFAULT_OUTPUT_SHARD_SIZE = 8
 
 #TODO: get_required_image_keys
 #TODO: Crop image into VOI.
@@ -88,12 +88,14 @@ def simplify_dataset_gcs(gcs_prefix: str, shards: List[str], output_prefix: str,
     shard_i = 0
     i = 0
     new_writer = True
+    writer = None
     for s in shards:
         with tempfile.TemporaryDirectory() as local_tmp:
             local_file = f"{str(local_tmp)}/{s}"
             download_blob(f"{gcs_prefix}{s}", local_file)
-            print("Local File: ", local_file)
-            for raw in tf.data.TFRecordDataset([local_file]):
+            dataset = tf.data.TFRecordDataset([local_file])
+
+            for raw in dataset:
                 if new_writer:
                     shard_i += 1
                     i = 0
@@ -107,11 +109,12 @@ def simplify_dataset_gcs(gcs_prefix: str, shards: List[str], output_prefix: str,
                 if tensor_element is not None:
                     _logger.info("Writing to disk")
                     writer.write(tensor_element.SerializeToString())
+                    writer.flush()
                     i += 1
-                else:
-                    _logger.warning("bad example")
 
+                del tensor_element
                 if i >= shard_size:
+                    writer.flush()
                     writer.close()
 
                     if not upload_to_gcs(writer_file, prefix=output_prefix):
@@ -120,6 +123,9 @@ def simplify_dataset_gcs(gcs_prefix: str, shards: List[str], output_prefix: str,
                             _logger.error(f"Tried twice to upload file {writer_file}")
 
                     new_writer = True
+                    del writer
+            del dataset
+
     if not new_writer:
         if not upload_to_gcs(writer_file, prefix=output_prefix):
             time.sleep(2)
@@ -181,9 +187,7 @@ def parse_raw(input) -> tf.Tensor:
 
     for k in image_keys:
         images[k.replace("image", "shape")] = int64List_feature(images[k].shape)
-        print(images[k].shape, )
         images[k] = int64List_feature(images[k].numpy().flatten().tolist())
-        # images[k] = bytes_feature(tf.io.serialize_tensor(images[k]).numpy())
 
     patient.update(images)
 
@@ -199,7 +203,6 @@ def get_required_image_keys(keys: List[str]) -> List[str]:
 
     Returns:
     """
-    print(keys, required_imaging_series())
     if set(required_imaging_series()) <= set(keys):
         return list(set(keys).intersection(set(required_imaging_series())))
     else:
@@ -207,5 +210,5 @@ def get_required_image_keys(keys: List[str]) -> List[str]:
 
 
 if __name__ == '__main__':
-    simplify_dataset_gcs("output/", [f"small_result_2-00000-of-00001.tfrecords_{str(i)}" for i in range(1)], "simplify/", )
-    # simplify_dataset(["../data/small_16.tfrecords", "../data/small_17.tfrecords"] , "new-boi")
+    simplify_dataset_gcs("output/", [f"small_result_2-00000-of-00001.tfrecords_{str(i)}" for i in range(41)], os.environ.get("GCS_UPLOAD_PREFIX", "simplify/"))
+

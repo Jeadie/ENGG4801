@@ -1,12 +1,16 @@
-from base.data_loader import DataLoader
-import tensorflow as tf
 import multiprocessing
-from typing import Tuple, Dict
+import os
 import random
+from typing import Dict, List, Tuple
+
+import tensorflow as tf
+
+from base.data_loader import DataLoader
 import data_loader.util as util
 
 
 class TFRecordShardLoader(DataLoader):
+    SHARD_SUFFIX = ".tfrecords"
     def __init__(self, config: dict, mode: str) -> None:
         """
         An example of how to create a dataset using tfrecords inputs
@@ -17,30 +21,40 @@ class TFRecordShardLoader(DataLoader):
 
         # Get a list of files in case you are using multiple tfrecords
         if self.mode == "train":
-            self.file_names = self.config["train_files"]
+            self.file_names = TFRecordShardLoader.get_file_or_files(self.config["train_files"])
             self.batch_size = self.config["train_batch_size"]
         elif self.mode == "val":
-            self.file_names = self.config["eval_files"]
+            self.file_names = TFRecordShardLoader.get_file_or_files(self.config["eval_files"])
             self.batch_size = self.config["eval_batch_size"]
         else:
-            self.file_names = self.config["test_files"]
+            self.file_names = TFRecordShardLoader.get_file_or_files(self.config["test_files"])
+
+    @staticmethod
+    def get_file_or_files(path: str) -> List[str]:
+        """ Gets all files in a folder or the single file itself.
+
+        Args:
+            path: Either the path to a file or directory.
+
+        Returns:
+            If a file and valid suffix, returns the file in a list. Otherwise
+            returns all files in the directory with appropriate suffix.
+        """
+        if os.path.isdir(path=path):
+            files = os.listdir(path=path)
+        else:
+            files = [path]
+        return list(filter(lambda x: x.endswith(TFRecordShardLoader.SHARD_SUFFIX), files))
 
     def input_fn(self) -> tf.data.Dataset:
         """
-        Create a tf.Dataset using tfrecords as inputs, use parallel
-        loading and augmentation using the CPU to
-        reduce bottle necking of operations on the GPU
-        :return: a Dataset function
-        """
-        # for raw in iter(tf.data.TFRecordDataset(self.file_names)):
-        #     patient, images = util.get_images(raw)
-        #     images = dict(images)
-        #     patient["group"] = util.calculate_group_from_results(patient["pCR"], patient["RCB"])
-        #     image = images["time4/SEG_VOI/image"]
-        #     image = tf.expand_dims(image[0, 0:64, 0:64], 0)
-        #     print(tf.one_hot(patient["group"]-1, 3))
-        #     yield tf.expand_dims(image, -1), tf.expand_dims(tf.one_hot(patient["group"]-1, 3), -1)
+        Create a tf.Dataset using tfrecords as inputs, use parallel loading
+        and augmentation using the CPU to reduce bottle necking of operations
+        on the GPU.
 
+        Returns:
+             A Dataset ready for use in the model.
+        """
         dataset = tf.data.TFRecordDataset(self.file_names).map(
             map_func=self._parse_example, num_parallel_calls=multiprocessing.cpu_count()
         )
@@ -52,11 +66,12 @@ class TFRecordShardLoader(DataLoader):
         else:
             dataset = dataset.repeat(self.config["num_epochs"])
         # create batches of data
+        print(max(len(self) // self.config["train_batch_size"], 2), "self.batch_size", self.batch_size)
         dataset = dataset.batch(batch_size=self.batch_size)
         return dataset
 
     def _parse_example(
-        self, _example: tf.Tensor
+            self, _example: tf.Tensor
     ) -> Tuple[Dict[str, tf.Tensor], tf.Tensor]:
         """
         Used to read in a single example from a tf record file and do any augmentations necessary
@@ -66,38 +81,29 @@ class TFRecordShardLoader(DataLoader):
         # do parsing on the cpu
         with tf.device("/cpu:0"):
             features = {
-                "time1/MRI_DCE/image": tf.io.VarLenFeature(tf.int64),
-                "time1/MRI_DCE/shape": tf.io.FixedLenFeature([3], tf.int64),
-                "group": tf.io.FixedLenFeature(shape=[1], dtype=tf.int64),
-                #TODO: parse seg and tissue into 3D matrices too.
-                # TODO: BBOX MRI_DCE
-                # "time1/SEG_VOI/image": tf.io.FixedLenFeature([], tf.int64),
-                # "time1/Tissue_SEG/image": tf.io.FixedLenFeature([], tf.int64),
+                **{"group": tf.io.FixedLenFeature(shape=[1], dtype=tf.int64)},
+                **dict([
+                    (key, tf.io.VarLenFeature(tf.int64)) for key in util.required_imaging_series()
+                ]),
+                **dict([
+                    (key.replace("image", "shape"), tf.io.FixedLenFeature([3], tf.int64)) for key in
+                    util.required_imaging_series()
+                ]),
             }
             example = tf.io.parse_single_example(_example, features)
-            image = tf.py_function(
-                util.reconstruct_image, (example["time1/MRI_DCE/image"].values, example["time1/MRI_DCE/shape"]), tf.int64)
 
+            result = {}
+            for image_key in util.required_imaging_series():
+                result[image_key] = tf.py_function(
+                    util.reconstruct_image, (example[image_key].values, example[image_key.replace("image", "shape")]),
+                    tf.int64)
+            print("result", result)
+            image = result["time1/MRI_DCE/image"]
 
-            image = tf.reshape(image, example["time1/MRI_DCE/shape"])
-
-            #TODO: This must magically pick a single slice from 3D (eventually will have to pick 64x64 too.
+            # TODO: This must magically pick a single slice from 3D (eventually will have to pick 64x64 too.
             image = tf.transpose(image, [2, 1, 0])
             image = tf.expand_dims(image[..., 0], -1)
-            print("FINAL IAMGE", image)
-            return image, tf.one_hot(example["group"]-1, 3)[0,...]
-            # #
-            # image = util.reconstruct_image(example["time4/SEG_VOI/image"], example["time4/SEG_VOI/shape"])
-            # image = self._normalise(image)
-            # # # only augment training data
-            # # if self.mode == "train":
-            #     input_data = self._augment(example["image"])
-            # else:
-            #     input_data = example["image"]
-            print(repr(example))
-            print(repr(example["time1/MRI_DCE/image"]), example["group"][0])
-            return {"input": example["time1/MRI_DCE/image"][0]}, example["group"][0]
-
+            return image, tf.one_hot(example["group"] - 1, 3)[0, ...]
 
 
     @staticmethod

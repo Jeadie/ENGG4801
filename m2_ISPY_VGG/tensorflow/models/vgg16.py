@@ -63,9 +63,6 @@ class VGG16(BaseModel):
             metrics=['accuracy']
         )
         return model
-        # return tf.keras.estimator.model_to_estimator(
-        #     model, model_dir=self.config.get("model_dir", os.getcwd())
-        # )
 
 
 def _vgg_block(x: tf.Tensor, filters: int, convs: int, activation: str, padding: str, name: str, p_dropout: float = -1) -> tf.Tensor:
