@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: m2-simplify-data
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+      - name: m2-simplify-data
+        image: gcr.io/long-loop-273905/m2_simplify:latest
+        command: ["python", 
+          "simplify_dataset.py", 
+        ]
+        env:
+        - name: GCS_UPLOAD_PREFIX
+          value: "simplify_2/"
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/stuff/gcp-key.json"
+        resources:
+          requests:
+            ephemeral-storage: "20Gi"
+          requests:
+            memory: "10Gi"
+
+        volumeMounts:
+          - mountPath: "stuff/"
+            name: gcp-key
+            readOnly: true
+      restartPolicy: Never
+      volumes:
+      - name: gcp-key
+        secret:
+          secretName: gcp-key 
+          items:
+          - key:  gcp-key.json
+            path: gcp-key.json
+   
