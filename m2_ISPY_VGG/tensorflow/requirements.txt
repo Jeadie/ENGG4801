@@ -1,6 +1,4 @@
 absl-py
-black
-pre-commit
-mypy
-flake8
-
+google-cloud-storage
+tensorflow
+numpy

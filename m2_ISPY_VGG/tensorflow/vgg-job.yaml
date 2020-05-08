@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: m2-initial-vgg-test
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+      - name: m2-initial-vgg-test
+        image: gcr.io/long-loop-273905/m2_vgg:latest
+        command: ["bash", "train_local_cpu.sh", "--job"]
+        env:
+        - name: OUTPUT_DIR
+          value: "data"
+        - name: TRAIN_BATCH
+          value: "10"
+        - name: EVAL_BATCH
+          value: "10"
+        - name: LEARNING_RATE
+          value: "0.002"
+        - name: EPOCHS
+          value: "1"
+        - name: JOB_NAME
+          value: "vgg-initial-test"
+        - name: GCS_FUSE_BUCKET
+          value: "ispy_dataquery"
+        - name: TRAIN_FOLDER
+          value: "ispy_dataquery/simplify_2/"
+        - name: EVAL_FOLDER
+          value: "ispy_dataquery/simplify_2/"
+        - name: TEST_FOLDER
+          value: "ispy_dataquery/simplify_2/"
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/stuff/gcp-key.json"
+
+        resources:
+          requests:
+            ephemeral-storage: "20Gi"
+          requests:
+            memory: "6Gi"
+
+        volumeMounts:
+          - mountPath: "stuff/"
+            name: gcp-key
+            readOnly: true
+      restartPolicy: Never
+      volumes:
+      - name: gcp-key
+        secret:
+          secretName: gcp-key 
+          items:
+          - key:  gcp-key.json
+            path: gcp-key.json
+   
