@@ -30,20 +30,22 @@ class TFRecordShardLoader(DataLoader):
             self.file_names = TFRecordShardLoader.get_file_or_files(self.config["test_files"])
 
     @staticmethod
-    def get_file_or_files(path: str) -> List[str]:
+    def get_file_or_files(paths: List[str]) -> List[str]:
         """ Gets all files in a folder or the single file itself.
 
         Args:
-            path: Either the path to a file or directory.
+            path: A list of paths to include in the dataset. Each path is
+              either the path to a file or directory.
 
         Returns:
             If a file and valid suffix, returns the file in a list. Otherwise
             returns all files in the directory with appropriate suffix.
         """
-        if os.path.isdir(path=path):
-            files = os.listdir(path=path)
-        else:
-            files = [path]
+        for p in paths:
+            if os.path.isdir(p):
+                files = os.listdir(p)
+            else:
+                files = [p]
         return list(filter(lambda x: x.endswith(TFRecordShardLoader.SHARD_SUFFIX), files))
 
     def input_fn(self) -> tf.data.Dataset:

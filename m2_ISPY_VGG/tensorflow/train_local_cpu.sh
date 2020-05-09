@@ -20,12 +20,13 @@ if [ "$1" != "--job" ]; then
     TEST_FILES="data/new-boi_1.tfrecords"
 fi
 
-if [ $GCS_FUSE_BUCKET != "" ]; then
+if [ "$GCS_FUSE_BUCKET" != "" ]; then
     # Mount storage bucket to folder
     gcsfuse $GCS_FUSE_BUCKET "$(pwd)/$GCS_FUSE_BUCKET/"
+fi 
 
 python3 -m initialisers.task \
-        --job-dir ${JOB_DIR} \
+        --job-dir "$(pwd)/$GCS_FUSE_BUCKET/${JOB_DIR}" \
         --train-batch-size ${TRAIN_BATCH} \
         --eval-batch-size ${EVAL_BATCH} \
         --learning-rate ${LEARNING_RATE} \
@@ -33,4 +34,4 @@ python3 -m initialisers.task \
         --train-files ${TRAIN_FILES} \
         --eval-files ${EVAL_FILES} \
         --test-files ${TEST_FILES} \
-        --export-path "${OUTPUT_DIR}exports" \
+        --export-path "${OUTPUT_DIR}/exports" \
