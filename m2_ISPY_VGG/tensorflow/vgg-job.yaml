@@ -25,11 +25,11 @@ spec:
           value: "vgg-initial-test"
         - name: GCS_FUSE_BUCKET
           value: "ispy_dataquery"
-        - name: TRAIN_FOLDER
+        - name: TRAIN_FILES
           value: "ispy_dataquery/simplify_2/"
-        - name: EVAL_FOLDER
+        - name: EVAL_FILES
           value: "ispy_dataquery/simplify_2/"
-        - name: TEST_FOLDER
+        - name: TEST_FILES
           value: "ispy_dataquery/simplify_2/"
         - name: GOOGLE_APPLICATION_CREDENTIALS
           value: "/stuff/gcp-key.json"
