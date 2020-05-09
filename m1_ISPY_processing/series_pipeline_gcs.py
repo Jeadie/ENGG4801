@@ -32,10 +32,18 @@ def construct(pipeline: Pipeline, settings) -> PCollection:
          The final PCollection from the patient pipeline.
     """
     f = SeriesFilter(filter_file=settings[constants.SERIES_DESCRIPTION_PATH])
-    series_paths = get_all_series(pipeline, settings)
+    if settings.get("SPECIFIC_GCS", None):
+        series_paths = (
+          pipeline 
+          | beam.Create(settings["SPECIFIC_GCS"])
+        )
+
+    else:
+        series_paths = get_all_series(pipeline, settings, f)
+        series_paths = (series_paths | "Only keep useful Series" >> beam.Filter(lambda x: f.filter_series_path(x)))
+
     converted_series = (
         series_paths
-        | "Only keep useful Series" >> beam.Filter(lambda x: f.filter_series_path(x))
         | "Parse and convert Series DICOMS" >> beam.Map(lambda x: convert_series(x, f))
         | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
     )
@@ -89,7 +97,17 @@ def construct_series(dicoms: List[Types.SeriesObj], filter: SeriesFilter) -> Typ
         SeriesConstructionError: If the imaging and metadata for a series could not be constructed.
     """
     try:
-        image = np.stack([d[0] for d in dicoms])
+        if len(dicoms) == 0: 
+            return None
+       
+        #Sort dicoms based on Slice Location tag
+        tag = 'Slice Location'
+        data = [(float(dcm[-1].get(tag, 1000)), dcm[0]) for dcm in dicoms]
+        
+        data.sort(key=lambda x: x[0])
+        image = np.stack([d[-1] for d in data])
+
+
         metadata = construct_metadata([d[-1] for d in dicoms], filter)
         return (image, metadata)
     except Exception as e:
@@ -126,7 +144,7 @@ def construct_metadata(dicom_metadata: List[Dict[str, object]], filter: SeriesFi
         ),
         "Spacing Between Slices": metadata.get("Spacing Between Slices", -1),
         "Modality": metadata.get("Modality", ""),
-        "Pixel Spacing": metadata.get("Pixel Spacing", -1),
+        "Pixel Spacing": metadata.get("Pixel Spacing", (-1, -1)),
         "Laterality": metadata.get("Laterality", ""),
     }
 
@@ -140,7 +158,7 @@ def simplify_values(dicom_metadata, k):
             return ""
         return values[0]
     except Exception as e:
-        print("f Error simplifying dicom metadata: {[d.get(k, '') for d in dicom_metadata]}.")
+        print(f"Error simplifying dicom metadata: {[d.get(k, '') for d in dicom_metadata]}.")
         return ""
 
 def process_local_DICOM(path: str) -> Tuple[np.array, Dict[str, object]]:
@@ -188,18 +206,31 @@ def get_dicoms(series_path: str) -> List[Types.SeriesObj]:
         raise DICOMAccessError()
 
 
-def get_all_series(pipeline, settings) -> PCollection[str]:
+def get_all_series(pipeline, settings, _filter) -> PCollection[str]:
     """ Gets the path to all the Series in the dataset.
 
     Returns: A Pcollection of path strings to each Series in the ISPY1 dataset.
     """
+
+    if settings.get("SPECIFIC_SERIES", None):
+         query = (
+            f"SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID "
+            f"FROM `chc-tcia.ispy1.ispy1` WHERE SeriesInstanceUID IN {tuple(settings.get('SPECIFIC_SERIES'))}"
+            f"GROUP BY StudyInstanceUID, SeriesInstanceUID"
+        )
+    else:
+        query = (
+        f"SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID "
+        f"FROM `chc-tcia.ispy1.ispy1` GROUP BY StudyInstanceUID, SeriesInstanceUID"
+    )
+
     series_path = (
         pipeline
-        | "Starting Bigquery" >> beam.Create([constants.BIGQUERY_SERIES_QUERY])
+        | "Starting Bigquery" >> beam.Create([query])
         | "Querying"
         >> beam.FlatMap(
-            lambda query: bigquery.Client()
-            .query(query)
+            lambda q: bigquery.Client()
+            .query(q)
             .result(page_size=settings.get(constants.SERIES_LIMIT, None))
         )
         | "Convert BQ row to GCS paths"

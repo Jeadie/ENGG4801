@@ -27,3 +27,4 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 ENV PYTHONUNBUFFERED=1
 COPY *.py ./
+COPY *.sh ./

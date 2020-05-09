@@ -2,7 +2,7 @@ from enum import Enum
 
 import pydicom as dicom
 
-import util
+from util import construct_metadata_from_DICOM_dictionary
 
 # TODO: Consider turning these into an Enum.
 ####################################
@@ -33,6 +33,7 @@ BIGQUERY_SERIES_QUERY = (
     f"FROM `chc-tcia.ispy1.ispy1` GROUP BY StudyInstanceUID, SeriesInstanceUID"
 )
 
+to_test = ["SequenceName", "AdmittingDiagnosesDescription"]
 
 # NOTE: DICOM_SPECIFIC_TYPES is used instead of list(DICOM_TYPE_CONVERSION.keys())
 # for performance reasons.
@@ -57,7 +58,7 @@ DICOM_TYPE_CONVERSION = {
     dicom.valuerep.DSfloat: float,
     dicom.valuerep.IS: int,
     dicom.valuerep.PersonName3: str,
-    dicom.dataset.Dataset: util.construct_metadata_from_DICOM_dictionary,
+    dicom.dataset.Dataset: construct_metadata_from_DICOM_dictionary,
     dicom.multival.MultiValue: test_multivalue,
     dicom.uid.UID: str,
     bytes: lambda x: x.decode(),
