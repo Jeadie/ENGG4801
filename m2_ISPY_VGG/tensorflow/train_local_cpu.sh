@@ -22,6 +22,7 @@ fi
 
 if [ "$GCS_FUSE_BUCKET" != "" ]; then
     # Mount storage bucket to folder
+    mkdir $GCS_FUSE_BUCKET
     gcsfuse $GCS_FUSE_BUCKET "$(pwd)/$GCS_FUSE_BUCKET/"
 fi 
 
