@@ -15,10 +15,7 @@ from series_filter import SeriesFilter
 from custom_exceptions import DICOMAccessError
 from custom_types import Types
 import util
-from util_series import (
-    convert_series,
-    process_local_DICOM
-)
+from util_series import convert_series, process_local_DICOM
 
 _logger = logging.getLogger()
 
@@ -45,8 +42,11 @@ def get_dicoms(series_path: str) -> List[Types.SeriesObj]:
 
         return dicoms
     except Exception as e:
-        _logger.error(f"An error occurred when acquiring Dicom's for {series_path}. Error: {e}. Must rerun to acquire data.")
+        _logger.error(
+            f"An error occurred when acquiring Dicom's for {series_path}. Error: {e}. Must rerun to acquire data."
+        )
         raise DICOMAccessError()
+
 
 def get_all_series(pipeline: Pipeline, studies_dir: str) -> PCollection[str]:
     """ Gets the path to all the Series in the dataset.
@@ -86,10 +86,11 @@ def construct(pipeline: Pipeline, settings: Dict[str, object]) -> PCollection:
     filter = SeriesFilter(filter_file=settings[constants.SERIES_DESCRIPTION_PATH])
     series_paths = get_all_series(pipeline, settings)
     converted_series = (
-            series_paths
-            | "Only keep useful Series" >> beam.Filter(filter.filter_series_path)
-            | "Parse and convert Series DICOMS" >> beam.Map(lambda x: convert_series(x, filter, get_dicoms))
-            | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
+        series_paths
+        | "Only keep useful Series" >> beam.Filter(filter.filter_series_path)
+        | "Parse and convert Series DICOMS"
+        >> beam.Map(lambda x: convert_series(x, filter, get_dicoms))
+        | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
     )
     return converted_series
 

@@ -1,12 +1,6 @@
-import argparse
-import sys
-import tempfile
 from functools import reduce
 from typing import Callable, Dict, List, Tuple
-
-import apache_beam as beam
-from apache_beam.pvalue import PCollection
-from apache_beam.pipeline import Pipeline
+import logging
 
 import numpy as np
 import pydicom as dicom
@@ -19,11 +13,9 @@ from custom_exceptions import (
 )
 from series_filter import SeriesFilter
 
-
-from google.cloud import bigquery, storage
-
-import constants
 import util
+
+_logger = logging.getLogger()
 
 
 def process_local_DICOM(path: str) -> Tuple[np.array, Dict[str, object]]:
@@ -40,7 +32,10 @@ def process_local_DICOM(path: str) -> Tuple[np.array, Dict[str, object]]:
     metadata = util.construct_metadata_from_DICOM_dictionary(d)
     return (d.pixel_array, metadata)
 
-def convert_series(series_path: str, filter:SeriesFilter, get_dicoms_fn: Callable) -> Types.SeriesObj:
+
+def convert_series(
+    series_path: str, filter: SeriesFilter, get_dicoms_fn: Callable
+) -> Types.SeriesObj:
     """ Parse a set of DICOMs of a given series, parses out DICOM tags as metadata and
         converts the image to Numpy.
 
@@ -56,9 +51,7 @@ def convert_series(series_path: str, filter:SeriesFilter, get_dicoms_fn: Callabl
         series = construct_series(dicoms, filter)
 
     except DICOMAccessError:
-        error_msg = (
-            f"Could not get DICOMS from data source: {series_path}"
-        )
+        error_msg = f"Could not get DICOMS from data source: {series_path}"
     except SeriesMetadataError:
         error_msg = "Could not construct metadata for series."
     except SeriesConstructionError as e:
@@ -70,13 +63,15 @@ def convert_series(series_path: str, filter:SeriesFilter, get_dicoms_fn: Callabl
         return series
 
     # On exception, log and return None (which will be filtered out)
-    print(
+    _logger.error(
         f"Error occurred when creating series for series: {series_path}. Error: {error_msg}. "
     )
     return None
 
 
-def construct_series(dicoms: List[Types.SeriesObj], filter: SeriesFilter) -> Types.SeriesObj:
+def construct_series(
+    dicoms: List[Types.SeriesObj], filter: SeriesFilter
+) -> Types.SeriesObj:
     """ Converts a list of parsed DICOM items into a single Series object
     with n+1 dimensional image and metadata merged.
 
@@ -93,7 +88,7 @@ def construct_series(dicoms: List[Types.SeriesObj], filter: SeriesFilter) -> Typ
             return None
 
         # Sort dicoms based on Slice Location tag
-        tag = 'Slice Location'
+        tag = "Slice Location"
         data = [(float(dcm[-1].get(tag, 1000)), dcm[0]) for dcm in dicoms]
 
         data.sort(key=lambda x: x[0])
@@ -102,11 +97,13 @@ def construct_series(dicoms: List[Types.SeriesObj], filter: SeriesFilter) -> Typ
         metadata = construct_metadata([d[-1] for d in dicoms], filter)
         return (image, metadata)
     except Exception as e:
-        print("ERROR", str(e))
+        _logger.error(f"An error occurred constructing the series. Error: {str(e)}.")
         raise SeriesConstructionError
 
 
-def construct_metadata(dicom_metadata: List[Dict[str, object]], filter: SeriesFilter) -> Dict[str, object]:
+def construct_metadata(
+    dicom_metadata: List[Dict[str, object]], filter: SeriesFilter
+) -> Dict[str, object]:
     """ Constructs the necessary Metadata from a list of DICOM metadata (converted to Pythonic types)
 
     Args:
@@ -126,9 +123,7 @@ def construct_metadata(dicom_metadata: List[Dict[str, object]], filter: SeriesFi
     metadata = {k: simplify_values(dicom_metadata, k) for k in keys}
     return {
         "time": metadata.get("Clinical Trial Time Point ID", "t-1"),
-        "flags": filter.get_series_flags(
-            metadata.get("Series Description", "")
-        ),
+        "flags": filter.get_series_flags(metadata.get("Series Description", "")),
         "Study Instance UID": metadata.get("Study Instance UID", ""),
         "Series Instance UID": metadata.get("Series Instance UID", ""),
         "Clinical Trial Subject ID": metadata.get(
@@ -151,5 +146,7 @@ def simplify_values(dicom_metadata, k):
             return ""
         return values[0]
     except Exception as e:
-        print(f"Error simplifying dicom metadata: {[d.get(k, '') for d in dicom_metadata]}.")
+        _logger.info(
+            f"Error simplifying dicom metadata for key, {k} : {[dict(d).get(k, '') for d in dicom_metadata]}."
+        )
         return ""

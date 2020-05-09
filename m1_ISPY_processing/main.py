@@ -6,7 +6,6 @@ from typing import Dict, List
 import apache_beam as beam
 from google.cloud import storage
 
-import constants
 from merge_and_save_pipeline import construct as MergeSavePipeline
 from patient_pipeline import construct as PatientPipeline
 from series_pipeline_gcs import construct as series_construct
@@ -19,11 +18,13 @@ def main(argv: List[str]) -> int:
     """Main program run for data processing."""
     return run_pipeline(argv, construct_main_pipeline)
 
+
 def main_pipeline(args: Dict[str, object], p: beam.Pipeline):
     output_series = series_construct(p, args)
     output_patient = PatientPipeline(p, args)
-    output_studies = StudiesPipeline(output_series, args)
+    output_studies = StudiesPipeline(output_series)
     MergeSavePipeline(output_patient, output_studies, args)
+
 
 def construct_main_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline) -> None:
     """ Responsible for constructing the main pipeline for processing ISPY1.
@@ -49,9 +50,8 @@ def construct_sequence_pipeline(files, extended_args) -> None:
 
         # Dynamically get proper series pipeline based on local/gcs studies path.
         main_pipeline(args, p)
-    
-    return constructor
 
+    return constructor
 
 
 def run_prefetched_series(argv):
@@ -62,13 +62,15 @@ def run_prefetched_series(argv):
     :return:
     """
     patient_series = SeriesFilter.batch_series_studies_by_patient()
-    batch_size=15
-    i=0
+    batch_size = 15
+    i = 0
     lines = []
 
     for p in patient_series:
         if (len(lines) + len(p)) > batch_size:
-            run_pipeline(argv, construct_sequence_pipeline(argv, {"SPECIFIC_GCS": lines}))
+            run_pipeline(
+                argv, construct_sequence_pipeline(argv, {"SPECIFIC_GCS": lines})
+            )
             client = storage.Client()
             bucket = client.get_bucket("ispy_dataquery")
             for b in os.listdir("output/"):
@@ -85,17 +87,19 @@ def run_prefetched_series(argv):
 
 
 def run_sequentially(argv):
-    with open('SERIES.csv') as f:
+    with open("SERIES.csv") as f:
         lines = [line.rstrip() for line in f]
     patient_series = SeriesFilter.batch_series_by_patient(lines)
 
-    batch_size=60
-    i=0
+    batch_size = 60
+    i = 0
     lines = []
 
     for p in patient_series:
         if (len(lines) + len(p)) > batch_size:
-            run_pipeline(argv, construct_sequence_pipeline(argv, {"SPECIFIC_SERIES": lines}))
+            run_pipeline(
+                argv, construct_sequence_pipeline(argv, {"SPECIFIC_SERIES": lines})
+            )
             client = storage.Client()
             bucket = client.get_bucket("ispy_dataquery")
             for b in os.listdir("output/"):
@@ -110,6 +114,6 @@ def run_sequentially(argv):
             # Else merely add to series
             lines.extend(p)
 
+
 if __name__ == "__main__":
     run_prefetched_series(sys.argv)
-       

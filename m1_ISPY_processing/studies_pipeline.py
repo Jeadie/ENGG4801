@@ -26,8 +26,8 @@ def construct(series_collection: PCollection) -> PCollection:
     )
     return group_by_patients
 
-def parse_patient_from_study(study: Types.StudyObj
-) -> Tuple[str, Types.StudyObj]:
+
+def parse_patient_from_study(study: Types.StudyObj) -> Tuple[str, Types.StudyObj]:
     """ Turns an element in a PCollection into a keyed, by patient id, element.
 
     Indexing:
@@ -39,13 +39,10 @@ def parse_patient_from_study(study: Types.StudyObj
         study: A single Study Object.
     A keyed element Tuple of the form (Patient ID, Study Object).
     """
-    return (
-        study[1][0][1].pop("Clinical Trial Subject ID"),
-        study
-    )
+    return (study[1][0][1].pop("Clinical Trial Subject ID"), study)
 
 
-def construct_studies_test_pipeline(parsed_args: argparse.Namespace,   p: beam.Pipeline):
+def construct_studies_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
     """ Runs a manual test of the Series Pipeline.
     """
     args = vars(parsed_args)

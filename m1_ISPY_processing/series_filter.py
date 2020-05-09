@@ -48,6 +48,7 @@ class SeriesFilter(object):
         "BRSTCA SENSFS3DSAG 6DYN": ["MRI", "SAG"],
         "NCI/HIGH_RES_SAG": ["MRI", "SAG"],
         "ACRIN_6657/LEFTFL3D_T1_SAG": ["MRI", "FL3D", "T1", "SAG", "LEFT"],
+        "5": ["MRI", "FL3D", "T1", "SAG", "LEFT"],
     }
     USED_SEG = {
         "Breast Tissue Segmentation": ["Tissue", "SEG"],
@@ -60,7 +61,12 @@ class SeriesFilter(object):
         ]
 
     @classmethod
-    def batch_series_studies_by_patient(cls, descriptions="series_description.csv", series_study_file="series_studies.csv", filter_file="ISPY1_MetaData.csv") -> List[List[str]]:
+    def batch_series_studies_by_patient(
+        cls,
+        descriptions="series_description.csv",
+        series_study_file="series_studies.csv",
+        filter_file="ISPY1_MetaData.csv",
+    ) -> List[List[str]]:
         """
 
         :return:
@@ -71,19 +77,29 @@ class SeriesFilter(object):
         data = pd.read_csv(series_study_file, delimiter=",", header=0)
         descriptions = pd.read_csv(descriptions, delimiter=",", header=0)
 
-
         df = df.rename(columns={"Series UID": "SeriesInstanceUID"})
         result = pd.merge(df, data, on=["SeriesInstanceUID", "SeriesInstanceUID"])
         result = result[["Patient Id", "StudyInstanceUID", "SeriesInstanceUID"]]
-        descriptions = descriptions[descriptions["SeriesDescription"].isin(list(SeriesFilter.USED_SEG.keys()) + list(SeriesFilter.USED_MRI.keys()))]
+        descriptions = descriptions[
+            descriptions["SeriesDescription"].isin(
+                list(SeriesFilter.USED_SEG.keys()) + list(SeriesFilter.USED_MRI.keys())
+            )
+        ]
 
-        result = result[result.SeriesInstanceUID.isin(descriptions["SeriesInstanceUID"])]
-        result["gs_path"] = result.apply(lambda x: f"gs://ispy_dataquery/dicoms/{x['StudyInstanceUID']}/{x['SeriesInstanceUID']}/", axis=1)
+        result = result[
+            result.SeriesInstanceUID.isin(descriptions["SeriesInstanceUID"])
+        ]
+        result["gs_path"] = result.apply(
+            lambda x: f"gs://ispy_dataquery/dicoms/{x['StudyInstanceUID']}/{x['SeriesInstanceUID']}/",
+            axis=1,
+        )
         result = dict(result.groupby("Patient Id")["gs_path"].apply(list))
         return list(result.values())
 
     @classmethod
-    def batch_series_by_patient(cls, lines, filter_file="ISPY1_MetaData.csv") -> List[List[str]]:
+    def batch_series_by_patient(
+        cls, lines, filter_file="ISPY1_MetaData.csv"
+    ) -> List[List[str]]:
         """
 
         :return:
@@ -109,8 +125,8 @@ class SeriesFilter(object):
 
         print("series_description", list(series_description))
         return (
-                list(series_description)[0] in SeriesFilter.USED_SEG.keys()
-                or list(series_description)[0] in SeriesFilter.USED_MRI.keys()
+            list(series_description)[0] in SeriesFilter.USED_SEG.keys()
+            or list(series_description)[0] in SeriesFilter.USED_MRI.keys()
         )
 
     def get_series_flags(self, description: str) -> List[str]:

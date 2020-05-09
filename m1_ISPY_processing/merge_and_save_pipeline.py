@@ -11,13 +11,17 @@ from util_tensorflow import (
     bytes_feature,
     int64_feature,
     float_feature,
-    int64List_feature
+    int64List_feature,
 )
+
 _logger = logging.getLogger()
 
 """Pipeline responsible for merging studies with Patient data and saving each to TFRecords."""
 
-def construct(patient: PCollection, studies: PCollection, settings: Dict[str, object]) -> None:
+
+def construct(
+    patient: PCollection, studies: PCollection, settings: Dict[str, object]
+) -> None:
     """ The Merge and Save pipeline as documented.
 
     Returns:
@@ -32,8 +36,7 @@ def construct(patient: PCollection, studies: PCollection, settings: Dict[str, ob
         | "Join Patient and Studies by Patient Key" >> beam.CoGroupByKey()
         | "Filter out Patients without Images or vice versa"
         >> beam.Filter(lambda x: (x[1]["studies"] != []))
-        | "Convert to tf.Examples"
-        >> beam.Map(convert_to_tf_example)
+        | "Convert to tf.Examples" >> beam.Map(convert_to_tf_example)
     )
 
     (
@@ -46,6 +49,7 @@ def construct(patient: PCollection, studies: PCollection, settings: Dict[str, ob
             num_shards=settings[constants.NUM_TFRECORD_SHARDS],
         )
     )
+
 
 def convert_to_tf_example(
     patient_data: Tuple[str, Dict[str, object]]
@@ -67,14 +71,13 @@ def convert_to_tf_example(
             study_data = convert_study_to_feature(study)
             for feature in study_data:
                 features.update(feature)
-        return tf.train.Example(
-            features=tf.train.Features(feature=features),
-        )
+        return tf.train.Example(features=tf.train.Features(feature=features),)
     except Exception as e:
-        _logger.error(f"Error occurred when creating a TFRecord. patient_data: {data.get('patient', data)}. Error: {e}.")
-        return tf.train.Example(
-            features=tf.train.Features(feature={}),
+        _logger.error(
+            f"Error occurred when creating a TFRecord. patient_data: {data.get('patient', data)}. Error: {e}."
         )
+        return tf.train.Example(features=tf.train.Features(feature={}),)
+
 
 def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Feature]:
     """ Converts a single SeriesObj to a feature dictionary.
@@ -96,21 +99,31 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
             name = f"time{metadata.get('time')[1:]}/{'_'.join(metadata.get('flags'))}/"
         else:
             name = dicom_id
-        return dict([(f"{name}{k}", v) for (k, v) in {
-                "image": int64List_feature(image.flatten().tolist()),
-                "dx": float_feature(metadata.get("Pixel Spacing")[0]),
-                "dy": float_feature(metadata.get("Pixel Spacing")[1]),
-                "dz": float_feature(metadata.get("Spacing Between Slices")),
-                "is_seg": int64_feature(int(metadata.get("Modality") == "SEG")),
-                "right": int64_feature(int(metadata.get("Laterality") == "R")),
-                "shape": int64List_feature(image.shape),
-                "dicom_id": bytes_feature(dicom_id.encode())
-            }.items()])
+        return dict(
+            [
+                (f"{name}{k}", v)
+                for (k, v) in {
+                    "image": int64List_feature(image.flatten().tolist()),
+                    "dx": float_feature(metadata.get("Pixel Spacing")[0]),
+                    "dy": float_feature(metadata.get("Pixel Spacing")[1]),
+                    "dz": float_feature(metadata.get("Spacing Between Slices")),
+                    "is_seg": int64_feature(int(metadata.get("Modality") == "SEG")),
+                    "right": int64_feature(int(metadata.get("Laterality") == "R")),
+                    "shape": int64List_feature(image.shape),
+                    "dicom_id": bytes_feature(dicom_id.encode()),
+                }.items()
+            ]
+        )
     except Exception as e:
-        _logger .error(f"Error making Series Features. Series meta: {metadata}. Error: {str(e)}")
+        _logger.error(
+            f"Error making Series Features. Series meta: {metadata}. Error: {str(e)}"
+        )
         return {}
 
-def convert_study_to_feature(study: List[Types.SeriesObj]) -> List[Dict[str, tf.train.Feature]]:
+
+def convert_study_to_feature(
+    study: List[Types.SeriesObj],
+) -> List[Dict[str, tf.train.Feature]]:
     """ Convert a single Study (parsed differently to a Types.StudyObj) into a list of
         feature dictionaries, each corresponding to a single Series.
 
@@ -159,6 +172,5 @@ def convert_patient_to_feature(
         "rfs_duration": int64_feature(patient_data.get("outcome").get("rfs_duration")),
         "pCR": int64_feature(patient_data.get("outcome").get("pCR")),
         "RCB": int64_feature(patient_data.get("outcome").get("RCB")),
-        "LD": int64List_feature(patient_data.get("LD"))
-
+        "LD": int64List_feature(patient_data.get("LD")),
     }

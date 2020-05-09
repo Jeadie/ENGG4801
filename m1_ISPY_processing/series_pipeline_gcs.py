@@ -21,12 +21,10 @@ from google.cloud import bigquery, storage
 
 import constants
 import util
-from util_series import (
-    convert_series,
-    process_local_DICOM
-)
+from util_series import convert_series, process_local_DICOM
 
 _logger = logging.getLogger()
+
 
 def construct(pipeline: Pipeline, settings) -> PCollection:
     """ The patient Pipeline as documented.
@@ -36,18 +34,18 @@ def construct(pipeline: Pipeline, settings) -> PCollection:
     """
     f = SeriesFilter(filter_file=settings[constants.SERIES_DESCRIPTION_PATH])
     if settings.get("SPECIFIC_GCS", None):
-        series_paths = (
-          pipeline 
-          | beam.Create(settings["SPECIFIC_GCS"])
-        )
+        series_paths = pipeline | beam.Create(settings["SPECIFIC_GCS"])
 
     else:
         series_paths = get_all_series(pipeline, settings, f)
-        series_paths = (series_paths | "Only keep useful Series" >> beam.Filter(lambda x: f.filter_series_path(x)))
+        series_paths = series_paths | "Only keep useful Series" >> beam.Filter(
+            lambda x: f.filter_series_path(x)
+        )
 
     converted_series = (
         series_paths
-        | "Parse and convert Series DICOMS" >> beam.Map(lambda x: convert_series(x, f, get_dicoms))
+        | "Parse and convert Series DICOMS"
+        >> beam.Map(lambda x: convert_series(x, f, get_dicoms))
         | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
     )
     return converted_series
@@ -79,7 +77,9 @@ def get_dicoms(series_path: str) -> List[Types.SeriesObj]:
 
         return dicoms
     except Exception as e:
-        _logger.error(f"An error occurred when acquiring Dicom's for {series_path}. Error: {e}. Must rerun to acquire data.")
+        _logger.error(
+            f"An error occurred when acquiring Dicom's for {series_path}. Error: {e}. Must rerun to acquire data."
+        )
         raise DICOMAccessError()
 
 
@@ -90,16 +90,16 @@ def get_all_series(pipeline, settings, _filter) -> PCollection[str]:
     """
 
     if settings.get("SPECIFIC_SERIES", None):
-         query = (
+        query = (
             f"SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID "
             f"FROM `chc-tcia.ispy1.ispy1` WHERE SeriesInstanceUID IN {tuple(settings.get('SPECIFIC_SERIES'))}"
             f"GROUP BY StudyInstanceUID, SeriesInstanceUID"
         )
     else:
         query = (
-        f"SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID "
-        f"FROM `chc-tcia.ispy1.ispy1` GROUP BY StudyInstanceUID, SeriesInstanceUID"
-    )
+            f"SELECT DISTINCT StudyInstanceUID, SeriesInstanceUID "
+            f"FROM `chc-tcia.ispy1.ispy1` GROUP BY StudyInstanceUID, SeriesInstanceUID LIMIT {settings.get(constants.SERIES_LIMIT, None)}"
+        )
 
     series_path = (
         pipeline
@@ -114,6 +114,7 @@ def get_all_series(pipeline, settings, _filter) -> PCollection[str]:
         >> beam.Map(lambda x: convert_bigquery_row_to_gcs(x, settings))
     )
     return series_path
+
 
 def convert_bigquery_row_to_gcs(row: bigquery.table.Row, settings) -> str:
     """ Converts a Biquery Row from the ISPY1 Table into the path to its directory in
@@ -137,7 +138,9 @@ def construct_series_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipe
     """ Runs a manual test of the Series Pipeline.
     """
     series = construct(p, vars(parsed_args))
-    _ = series | "Print Results" >> beam.Map(lambda x: _logger.info(f"Element: {str(x)}"))
+    _ = series | "Print Results" >> beam.Map(
+        lambda x: _logger.info(f"Element: {str(x)}")
+    )
 
 
 if __name__ == "__main__":
