@@ -26,5 +26,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --default-timeout=100 -r requirements.txt
 
 ENV PYTHONUNBUFFERED=1
-COPY *.py ./
+COPY ./base/*.py  base/
+COPY ./trainers/*.py trainers/
+COPY ./utils/*.py utils/
+COPY ./initialisers/*.py initialisers/
+COPY ./data_loader/*.py data_loader/
+COPY ./models/*.py models/
 COPY *.sh ./

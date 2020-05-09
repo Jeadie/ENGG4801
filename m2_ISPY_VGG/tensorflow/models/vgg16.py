@@ -1,6 +1,5 @@
 import os
 
-import keras
 import tensorflow as tf
 from tensorflow.keras.layers import (
     BatchNormalization,
@@ -51,7 +50,7 @@ class VGG16(BaseModel):
         x = Dense(dense_units,
                   activation=activation,
                   name='fc1',
-                  kernel_regularizer=keras.regularizers.l2(0.01))(x)
+                  kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
 
         x = Dropout(p_dropout)(x)
         x = Dense(3, activation='softmax', name='predictions')(x)
