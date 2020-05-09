@@ -10,55 +10,48 @@ from custom_types import Types
 import util
 
 
-class StudiesPipeline(object):
-    def __init__(self, series_collection: PCollection, argv: Dict[str, object]):
-        """ Constructor.
-        Args:
+def construct(series_collection: PCollection) -> PCollection:
+    """ The Studies pipeline as documented.
 
-            argv: Parsed arguments from CLI.
-        """
-        self.series = series_collection
-        self.settings = argv
+    Returns:
+         The final PCollection from the patient pipeline.
+    """
+    group_by_patients = (
+        series_collection
+        | "Parse out Study ID from each Series Obj"
+        >> beam.Map(lambda x: (x[1].get("Study Instance UID"), x))
+        | "Group by Study ID" >> beam.GroupByKey()
+        | "Parse out Patient ID" >> beam.Map(parse_patient_from_study)
+        | "Group by Patient ID" >> beam.GroupByKey()
+    )
+    return group_by_patients
 
-    def construct(self) -> PCollection:
-        """ The Studies pipeline as documented.
+def parse_patient_from_study(study: Types.StudyObj
+) -> Tuple[str, Types.StudyObj]:
+    """ Turns an element in a PCollection into a keyed, by patient id, element.
 
-        Returns:
-             The final PCollection from the patient pipeline.
-        """
-        group_by_patients = (
-            self.series
-            | "Parse out Study ID from each Series Obj"
-            >> beam.Map(lambda x: (x[1].get("Study Instance UID"), x))
-            | "Group by Study ID" >> beam.GroupByKey()
-            | "Parse out Patient ID" >> beam.Map(self.parse_patient_from_study)
-            | "Group by Patient ID" >> beam.GroupByKey()
-        )
-        return group_by_patients
+    Indexing:
+        series= study[1]
+        singular_series = series[0]
+        singular_series_metadata = singular_series[1]
 
-    def parse_patient_from_study(
-        self, study: Types.StudyObj
-    ) -> Tuple[str, Types.StudyObj]:
-        """ Turns an element in a PCollection into a keyed, by patient id, element.
-
-        Indexing:
-            series= study[1]
-            singular_series = series[0]
-            singular_series_metadata = singular_series[1]
-
-        Args:
-            study: A single Study Object.
-        A keyed element Tuple of the form (Patient ID, Study Object).
-        """
-        return (study[1][0][1].pop("Clinical Trial Subject ID"), study)
+    Args:
+        study: A single Study Object.
+    A keyed element Tuple of the form (Patient ID, Study Object).
+    """
+    return (
+        study[1][0][1].pop("Clinical Trial Subject ID"),
+        study
+    )
 
 
 def construct_studies_test_pipeline(parsed_args: argparse.Namespace,   p: beam.Pipeline):
     """ Runs a manual test of the Series Pipeline.
     """
     args = vars(parsed_args)
-    series = util.get_series_pipeline(args[constants.STUDIES_PATH])(p, args).construct()
-    studies = StudiesPipeline(series, vars(parsed_args)).construct()
+    series = util.get_series_pipeline(args[constants.STUDIES_PATH])(p, args)
+    studies = construct(series)
+
     _ = studies | "Print Results" >> beam.Map(lambda x: print(f"Element: {str(x)}"))
 
 

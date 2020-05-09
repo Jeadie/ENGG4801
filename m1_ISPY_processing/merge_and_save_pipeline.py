@@ -1,4 +1,5 @@
 from typing import Dict, List, Tuple
+import logging
 
 import apache_beam as beam
 from apache_beam.pvalue import PCollection
@@ -12,87 +13,68 @@ from util_tensorflow import (
     float_feature,
     int64List_feature
 )
+_logger = logging.getLogger()
 
+"""Pipeline responsible for merging studies with Patient data and saving each to TFRecords."""
 
-class MergeSavePipeline(object):
-    """Pipeline responsible for merging studies with Patient data and saving each to TFRecords."""
+def construct(patient: PCollection, studies: PCollection, settings: Dict[str, object]) -> None:
+    """ The Merge and Save pipeline as documented.
 
-    def __init__(
-        self,
-        output_patient: PCollection,
-        output_studies: PCollection,
-        argv: Dict[str, object],
-    ) -> None:
-        """ Constructor.
+    Returns:
+         None. No result is returned. This pipeline writes to all final data sinks.
+    """
+    # Map PCollections to Keyed PCollections.
+    patient_key = patient | "Create Keyed PCollection for Patient" >> beam.Map(
+        lambda x: (str(x["patient_id"]), x)
+    )
+    tf_examples = (
+        {"studies": studies, "patient": patient_key}
+        | "Join Patient and Studies by Patient Key" >> beam.CoGroupByKey()
+        | "Filter out Patients without Images or vice versa"
+        >> beam.Filter(lambda x: (x[1]["studies"] != []))
+        | "Convert to tf.Examples"
+        >> beam.Map(convert_to_tf_example)
+    )
 
-        Args:
-            output_patient: The outputted PCollection from the Patient Pipeline.
-            output_studies: The outputted PCollection from the Studies Pipeline.
-            argv: Parsed CLI arguments.
-        """
-        self.patient = output_patient
-        self.studies = output_studies
-        self.settings = argv
-
-    def construct(self) -> None:
-        """ The Merge and Save pipeline as documented.
-
-        Returns:
-             None. No result is returned. This pipeline writes to all final data sinks.
-        """
-        # Map PCollections to Keyed PCollections.
-        patient_key = self.patient | "Create Keyed PCollection for Patient" >> beam.Map(
-            lambda x: (str(x["patient_id"]), x)
+    (
+        tf_examples
+        | "Serialise tf.Example" >> beam.Map(lambda x: x.SerializeToString())
+        | "Save to TFRecord"
+        >> beam.io.WriteToTFRecord(
+            file_path_prefix=settings[constants.TFRECORD_NAME],
+            file_name_suffix=constants.TFRECORD_SUFFIX,
+            num_shards=settings[constants.NUM_TFRECORD_SHARDS],
         )
-        tf_examples = (
-            {"studies": self.studies, "patient": patient_key}
-            | "Join Patient and Studies by Patient Key" >> beam.CoGroupByKey()
-            | "Filter out Patients without Images or vice versa"
-            >> beam.Filter(lambda x: (x[1]["studies"] != []))
-            | "Convert to tf.Examples"
-            >> beam.Map(MergeSavePipeline.convert_to_tf_example)
+    )
+
+def convert_to_tf_example(
+    patient_data: Tuple[str, Dict[str, object]]
+) -> tf.train.Example:
+    """ Converts an element from the combined patient+study PCollection into a TF Example.
+
+    Args:
+        patient_data: A single patient's data with clinical, outcome and imaging data.
+
+    Returns:
+        An Example ready to be serialised and saved out of memory (as a TFRecord generally)
+    """
+    try:
+        data = patient_data[1]
+        patient = data["patient"][0]
+        studies = data["studies"][0]
+        features = convert_patient_to_feature(patient)
+        for study_id, study in studies:
+            study_data = convert_study_to_feature(study)
+            for feature in study_data:
+                features.update(feature)
+        return tf.train.Example(
+            features=tf.train.Features(feature=features),
         )
-
-        (
-            tf_examples
-            | "Serialise tf.Example" >> beam.Map(lambda x: x.SerializeToString())
-            | "Save to TFRecord"
-            >> beam.io.WriteToTFRecord(
-                file_path_prefix=self.settings[constants.TFRECORD_NAME],
-                file_name_suffix=constants.TFRECORD_SUFFIX,
-                num_shards=self.settings[constants.NUM_TFRECORD_SHARDS],
-            )
+    except Exception as e:
+        _logger.error(f"Error occurred when creating a TFRecord. patient_data: {data.get('patient', data)}. Error: {e}.")
+        return tf.train.Example(
+            features=tf.train.Features(feature={}),
         )
-
-    @staticmethod
-    def convert_to_tf_example(
-        patient_data: Tuple[str, Dict[str, object]]
-    ) -> tf.train.Example:
-        """ Converts an element from the combined patient+study PCollection into a TF Example.
-
-        Args:
-            patient_data: A single patient's data with clinical, outcome and imaging data.
-
-        Returns:
-            An Example ready to be serialised and saved out of memory (as a TFRecord generally)
-        """
-        try:
-            data = patient_data[1]
-            patient = data["patient"][0]
-            studies = data["studies"][0]
-            features = convert_patient_to_feature(patient)
-            for study_id, study in studies:
-                study_data = convert_study_to_feature(study)
-                for feature in study_data:
-                    features.update(feature)
-            return tf.train.Example(
-                features=tf.train.Features(feature=features),
-            )
-        except Exception as e:
-            print(f"Error occurred when creating a TFRecord. patient_data: {data.get('patient', data)}. Error: {e}.")
-            return tf.train.Example(
-                features=tf.train.Features(feature={}),
-            )
 
 def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Feature]:
     """ Converts a single SeriesObj to a feature dictionary.
@@ -125,7 +107,7 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
                 "dicom_id": bytes_feature(dicom_id.encode())
             }.items()])
     except Exception as e:
-        print(f"Error making Series Features. Series meta: {metadata}. Error: {str(e)}")
+        _logger .error(f"Error making Series Features. Series meta: {metadata}. Error: {str(e)}")
         return {}
 
 def convert_study_to_feature(study: List[Types.SeriesObj]) -> List[Dict[str, tf.train.Feature]]:

@@ -1,17 +1,17 @@
 import argparse
 import os
 import sys
-from typing import List
+from typing import Dict, List
 
 import apache_beam as beam
 from google.cloud import storage
 
 import constants
-from merge_and_save_pipeline import MergeSavePipeline
-from patient_pipeline import PatientPipeline
+from merge_and_save_pipeline import construct as MergeSavePipeline
+from patient_pipeline import construct as PatientPipeline
 from series_pipeline_gcs import construct as series_construct
 from series_filter import SeriesFilter
-from studies_pipeline import StudiesPipeline
+from studies_pipeline import construct as StudiesPipeline
 from util import run_pipeline
 
 
@@ -19,6 +19,11 @@ def main(argv: List[str]) -> int:
     """Main program run for data processing."""
     return run_pipeline(argv, construct_main_pipeline)
 
+def main_pipeline(args: Dict[str, object], p: beam.Pipeline):
+    output_series = series_construct(p, args)
+    output_patient = PatientPipeline(p, args)
+    output_studies = StudiesPipeline(output_series, args)
+    MergeSavePipeline(output_patient, output_studies, args)
 
 def construct_main_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline) -> None:
     """ Responsible for constructing the main pipeline for processing ISPY1.
@@ -27,13 +32,8 @@ def construct_main_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline) -
         parsed_args: CLI arguments parsed and validated.
     :param p: A pipeline, preconfigured with pipeline options.
     """
-    args = vars(parsed_args)
+    return main(vars(parsed_args), p)
 
-    # Dynamically get proper series pipeline based on local/gcs studies path.
-    output_series = series_construct(p, args)
-    output_patient = PatientPipeline(p, args).construct()
-    output_studies = StudiesPipeline(output_series, args).construct()
-    MergeSavePipeline(output_patient, output_studies, args).construct()
 
 def construct_sequence_pipeline(files, extended_args) -> None:
     """ Responsible for constructing the main pipeline for processing ISPY1.
@@ -46,11 +46,9 @@ def construct_sequence_pipeline(files, extended_args) -> None:
     def constructor(parsed_args: argparse.Namespace, p: beam.Pipeline) -> None:
         args = vars(parsed_args)
         args = {**args, **extended_args}
+
         # Dynamically get proper series pipeline based on local/gcs studies path.
-        output_series = series_construct(p, args)
-        output_patient = PatientPipeline(p, args).construct()
-        output_studies = StudiesPipeline(output_series, args).construct()
-        MergeSavePipeline(output_patient, output_studies, args).construct()
+        main_pipeline(args, p)
     
     return constructor
 
