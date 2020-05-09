@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: m1-pod
+spec:  # specification of the pod's contents
+  restartPolicy: Never
+  containers:
+  - name: m1-pod
+    image: gcr.io/long-loop-273905/m1:latest
+    command: ["/bin/bash"]
+  volumes:
+    - name: gcp
+      secret:
+        secretName:  gcp-key 
+        items:
+        - key:  gcp-key.json
+          path: gcp-key.json

@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: m1-data-processings
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+      - name: m1-jobby
+        image: gcr.io/long-loop-273905/m1:latest
+        command: ["python", 
+          "main.py", 
+          "--runner=DirectRunner", 
+          "--num-series=$(NUM_SERIES)", 
+          "--studies-dir=$(STUDIES_DIRECTORY)", 
+          "--tfrecord-name=$(TFRECORD_NAME)",
+          "--num-shards=$(NUM_SHARDS)",
+          "--patient-clinical=clinical.csv", 
+          "--series-descriptions=ISPY1_MetaData.csv", 
+          "--patient-outcomes=outcome.csv"
+        ]
+        env:
+        - name: NUM_SERIES
+          value: "4"
+        - name: STUDIES_DIRECTORY
+          value: "gs://ispy_dataquery/dicoms/" 
+        - name: TFRECORD_NAME
+          value: "output/result_2" 
+        - name: NUM_SHARDS
+          value: "1"
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/stuff/gcp-key.json"
+        resources:
+          requests:
+            ephemeral-storage: "20Gi"
+          requests:
+            memory: "8Gi"
+
+        volumeMounts:
+          - mountPath: "stuff/"
+            name: gcp-key
+            readOnly: true
+      restartPolicy: Never
+      volumes:
+      - name: gcp-key
+        secret:
+          secretName: gcp-key 
+          items:
+          - key:  gcp-key.json
+            path: gcp-key.json
+   

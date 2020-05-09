@@ -107,7 +107,7 @@ class PatientPipeline(object):
             | "Flatten outcomes & clinical" >> beam.Map(self.flatten_patient_data)
         )
 
-    def load_csv(self, csv_path: str) -> PCollection:
+    def load_csv(self, csv_path: str, split=constants.CSV_DELIMETER) -> PCollection:
         """ Loads a CSV from a file.
 
         Args:
@@ -116,12 +116,13 @@ class PatientPipeline(object):
         Returns:
             A PCollection whereby each element is a row from the CSV with type, List[str].
         """
+        print(csv_path)
         return (
             self.pipeline
             | f"Read CSV: {csv_path}"
             >> beam.io.ReadFromText(csv_path, skip_header_lines=1)
             | f"Split CSV: {csv_path}"
-            >> beam.Map(lambda x: x.split(constants.CSV_DELIMETER))
+            >> beam.Map(lambda x: x.split(split))
         )
 
     def flatten_patient_data(self, patient):

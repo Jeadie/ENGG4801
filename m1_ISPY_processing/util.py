@@ -7,8 +7,6 @@ from apache_beam.options.pipeline_options import PipelineOptions
 import pydicom
 
 import constants
-from series_pipeline_gcs import GCSSeriesPipeline
-from series_pipeline_local import LocalSeriesPipeline
 
 
 def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
@@ -26,8 +24,8 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
     parser = argparse.ArgumentParser(
         prog="ISPY1 Dataset Processing Pipeline.",
         description="This is a pipeline that processes the ISPY1 dataset into TFRecords ready for ML training."
-        "If using Google DataFlow, there are more optional parameters to configure DataFlow itself."
-        "See: https://cloud.google.com/dataflow/docs/guides/specifying-exec-params#setting-other-cloud-dataflow-pipeline-options",
+                    "If using Google DataFlow, there are more optional parameters to configure DataFlow itself."
+                    "See: https://cloud.google.com/dataflow/docs/guides/specifying-exec-params#setting-other-cloud-dataflow-pipeline-options",
     )
 
     # CSV files for Patient Pipeline
@@ -53,7 +51,7 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
         dest=constants.SERIES_LIMIT,
         type=int,
         help="Number of series to process in total.",
-        default=None # Bigquery specific value
+        default=None  # Bigquery specific value
     )
     parser.add_argument(
         f"--{constants.TFRECORD_NAME.replace('_', '-')}",
@@ -83,8 +81,8 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
 
 
 def run_pipeline(
-    argv: List[str],
-    construct_pipeline: Callable[[argparse.Namespace, beam.Pipeline], None],
+        argv: List[str],
+        construct_pipeline: Callable[[argparse.Namespace, beam.Pipeline], None],
 ) -> int:
     """ Runs a arbitrary pipeline.
 
@@ -104,7 +102,7 @@ def run_pipeline(
 
 
 def construct_metadata_from_DICOM_dictionary(
-    dicom: pydicom.Dataset,
+        dicom: pydicom.Dataset,
 ) -> Dict[str, object]:
     """ Converts DICOM dictionary tags to a pythonic dictionary.
 
@@ -151,17 +149,17 @@ def parse_gcs_path(path: str) -> Tuple[str, str]:
     prefix = x[3:-1]
     return bucket, "/".join(prefix)
 
-
-def get_series_pipeline(studies_path: str) -> type:
-    """ Gets the appropriate series pipeline given the location of its studies.
-
-    Args:
-        studies_path: Path the the studies.
-
-    Returns:
-        The type of BaseSeriesPipeline to use, either GCSSeriesPipeline or LocalSeriesPipeline.
-    """
-    if constants.GCS_PREFIX in studies_path:
-        return GCSSeriesPipeline
-    else:
-        return LocalSeriesPipeline
+#
+# def get_series_pipeline(studies_path: str) -> type:
+#     """ Gets the appropriate series pipeline given the location of its studies.
+#
+#     Args:
+#         studies_path: Path the the studies.
+#
+#     Returns:
+#         The type of BaseSeriesPipeline to use, either GCSSeriesPipeline or LocalSeriesPipeline.
+#     """
+#     if constants.GCS_PREFIX in studies_path:
+#         return GCSSeriesPipeline
+#     else:
+#         return LocalSeriesPipeline

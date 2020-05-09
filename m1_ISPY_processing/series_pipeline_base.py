@@ -37,11 +37,11 @@ class BaseSeriesPipeline(object):
         Returns:
              The final PCollection from the patient pipeline.
         """
-        series_paths = self.get_all_series()
+        series_paths = type(self).get_all_series(self.pipeline, self.settings)
         converted_series = (
             series_paths
             | "Only keep useful Series" >> beam.Filter(self.filter.filter_series_path)
-            | "Parse and convert Series DICOMS" >> beam.Map(self.convert_series)
+            | "Parse and convert Series DICOMS" >> beam.Map(lambda x: type(self).convert_series(x, self.filter))
             | "Filter out empty directories" >> beam.Filter(lambda x: x is not None)
         )
         # _ = (
@@ -59,7 +59,8 @@ class BaseSeriesPipeline(object):
         """
         return None
 
-    def convert_series(self, series_path: str) -> Types.SeriesObj:
+    @classmethod
+    def convert_series(cls, series_path: str, filter:SeriesFilter) -> Types.SeriesObj:
         """ Parse a set of DICOMs of a given series, parses out DICOM tags as metadata and
             converts the image to Numpy.
 
@@ -71,16 +72,12 @@ class BaseSeriesPipeline(object):
 
         """
         try:
-            dicoms = self.get_dicoms(series_path)
-            if len(dicoms) == 0:
-                return None
-
-            series = self.construct_series(dicoms)
+            dicoms = cls.get_dicoms(series_path)
+            series = BaseSeriesPipeline.construct_series(dicoms, filter)
 
         except DICOMAccessError:
             error_msg = (
-                f"Could not get DICOMS from data source: "
-                f"{self.settings.get(constants.STUDIES_PATH, 'Failed to log path to Data source.')}"
+                f"Could not get DICOMS from data source: {series_path}"
             )
         except SeriesMetadataError:
             error_msg = "Could not construct metadata for series."
@@ -98,7 +95,8 @@ class BaseSeriesPipeline(object):
         )
         return None
 
-    def get_dicoms(self, series_path: str) -> List[SeriesObj]:
+    @classmethod
+    def get_dicoms(cls, series_path: str) -> List[SeriesObj]:
         """ Gets the DICOMs for a Series.
 
         Args:
@@ -113,7 +111,8 @@ class BaseSeriesPipeline(object):
             "Base Class, `BaseSeriesPipeline` does not implement `convert_series`"
         )
 
-    def construct_series(self, dicoms: List[Types.SeriesObj]) -> SeriesObj:
+    @classmethod
+    def construct_series(cls, dicoms: List[Types.SeriesObj], filter: SeriesFilter) -> SeriesObj:
         """ Converts a list of parsed DICOM items into a single Series object
         with n+1 dimensional image and metadata merged.
 
@@ -127,14 +126,15 @@ class BaseSeriesPipeline(object):
         """
         try:
             image = np.stack([d[0] for d in dicoms])
-            metadata = self.construct_metadata([d[-1] for d in dicoms])
+            metadata = BaseSeriesPipeline.construct_metadata([d[-1] for d in dicoms], filter)
             return (image, metadata)
         except Exception as e:
-            print()
+            print("ERROR", str(e))
             raise SeriesConstructionError
 
+    @classmethod
     def construct_metadata(
-        self, dicom_metadata: List[Dict[str, object]]
+        cls, dicom_metadata: List[Dict[str, object]], filter: SeriesFilter
     ) -> Dict[str, object]:
         """ Constructs the necessary Metadata from a list of DICOM metadata (converted to Pythonic types)
 
@@ -152,10 +152,10 @@ class BaseSeriesPipeline(object):
         )
 
         # Convert list of dictionaries into dictionary of lists (key -> List[values])
-        metadata = {k: self.simplify_values(dicom_metadata, k) for k in keys}
+        metadata = {k: BaseSeriesPipeline.simplify_values(dicom_metadata, k) for k in keys}
         return {
             "time": metadata.get("Clinical Trial Time Point ID", "t-1"),
-            "flags": self.filter.get_series_flags(
+            "flags": filter.get_series_flags(
                 metadata.get("Series Description", "")
             ),
             "Study Instance UID": metadata.get("Study Instance UID", ""),
@@ -165,12 +165,23 @@ class BaseSeriesPipeline(object):
             ),
             "Spacing Between Slices": metadata.get("Spacing Between Slices", -1),
             "Modality": metadata.get("Modality", ""),
-            "Pixel Spacing": metadata.get("Pixel Spacing", -1),
+            "Pixel Spacing": metadata.get("Pixel Spacing", (-1 ,-1)),
             "Laterality": metadata.get("Laterality", ""),
         }
         # return metadata
+    
+    @classmethod
+    def get_all_series(cls, pipeline, settings) -> PCollection[str]:
+        """ Gets the path to all the Series in the dataset.
 
-    def simplify_values(self, dicom_metadata, k):
+        Returns: A Pcollection of path strings to each Series in the ISPY1 dataset.
+        """
+        raise NotImplementedError(
+            "Base Class, `BaseSeriesPipeline` does not implement `get_all_series`"
+        )
+
+    @classmethod
+    def simplify_values(cls, dicom_metadata, k):
         try:
             if type(dicom_metadata[0][k]) == list:
                 values = list(set([tuple(d[k]) for d in dicom_metadata if d.get(k)]))
@@ -183,7 +194,8 @@ class BaseSeriesPipeline(object):
             print("f Error simplifying dicom metadata: {[d.get(k, '') for d in dicom_metadata]}.")
             return ""
 
-    def process_local_DICOM(self, path: str) -> Tuple[np.array, Dict[str, object]]:
+    @classmethod
+    def process_local_DICOM(cls, path: str) -> Tuple[np.array, Dict[str, object]]:
         """ Processes a locally saved, unopen DICOM file.
 
         Args:
@@ -197,11 +209,3 @@ class BaseSeriesPipeline(object):
         metadata = util.construct_metadata_from_DICOM_dictionary(d)
         return (d.pixel_array, metadata)
 
-    def get_all_series(self) -> PCollection[str]:
-        """ Gets the path to all the Series in the dataset.
-
-        Returns: A Pcollection of path strings to each Series in the ISPY1 dataset.
-        """
-        raise NotImplementedError(
-            "Base Class, `BaseSeriesPipeline` does not implement `get_all_series`"
-        )

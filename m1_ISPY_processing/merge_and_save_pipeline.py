@@ -106,24 +106,27 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
     Returns:
         A feature dictionary for a single Series.
     """
-    image, metadata = series
-    dicom_id = f"{metadata.get('Study Instance UID', 'unknown_study')}/{metadata.get('Series Instance UID', 'unknown_series')}/"
+    try:
+        image, metadata = series
+        dicom_id = f"{metadata.get('Study Instance UID', 'unknown_study')}/{metadata.get('Series Instance UID', 'unknown_series')}/"
 
-    if metadata.get("flags") and metadata.get("time"):
-        name = f"time{metadata.get('time')[1:]}/{'_'.join(metadata.get('flags'))}/"
-    else:
-        name = dicom_id
-    return dict([(f"{name}{k}", v) for (k, v) in {
-            "image": int64List_feature(image.flatten().tolist()),
-            "dx": float_feature(metadata.get("Pixel Spacing")[0]),
-            "dy": float_feature(metadata.get("Pixel Spacing")[1]),
-            "dz": float_feature(metadata.get("Spacing Between Slices")),
-            "is_seg": int64_feature(int(metadata.get("Modality") == "SEG")),
-            "right": int64_feature(int(metadata.get("Laterality") == "R")),
-            "shape": int64List_feature(image.shape),
-            "dicom_id": bytes_feature(dicom_id.encode())
-        }.items()])
-
+        if metadata.get("flags") and metadata.get("time"):
+            name = f"time{metadata.get('time')[1:]}/{'_'.join(metadata.get('flags'))}/"
+        else:
+            name = dicom_id
+        return dict([(f"{name}{k}", v) for (k, v) in {
+                "image": int64List_feature(image.flatten().tolist()),
+                "dx": float_feature(metadata.get("Pixel Spacing")[0]),
+                "dy": float_feature(metadata.get("Pixel Spacing")[1]),
+                "dz": float_feature(metadata.get("Spacing Between Slices")),
+                "is_seg": int64_feature(int(metadata.get("Modality") == "SEG")),
+                "right": int64_feature(int(metadata.get("Laterality") == "R")),
+                "shape": int64List_feature(image.shape),
+                "dicom_id": bytes_feature(dicom_id.encode())
+            }.items()])
+    except Exception as e:
+        print(f"Error making Series Features. Series meta: {metadata}. Error: {str(e)}")
+        return {}
 
 def convert_study_to_feature(study: List[Types.SeriesObj]) -> List[Dict[str, tf.train.Feature]]:
     """ Convert a single Study (parsed differently to a Types.StudyObj) into a list of
