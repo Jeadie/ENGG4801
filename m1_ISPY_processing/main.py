@@ -85,6 +85,12 @@ def run_prefetched_series(argv):
             # Else merely add to series
             lines.extend(p)
 
+def dataflow(argv):
+    patient_series = SeriesFilter.batch_series_studies_by_patient()
+    flat_series = [item for sublist in patient_series for item in sublist]
+    run_pipeline(
+     argv, construct_sequence_pipeline(argv, {"SPECIFIC_SERIES": flat_series})
+    )
 
 def run_sequentially(argv):
     with open("SERIES.csv") as f:
@@ -116,4 +122,4 @@ def run_sequentially(argv):
 
 
 if __name__ == "__main__":
-    run_prefetched_series(sys.argv)
+    dataflow(sys.argv)
