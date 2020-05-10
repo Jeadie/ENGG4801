@@ -11,6 +11,7 @@ from util_tensorflow import (
     bytes_feature,
     int64_feature,
     float_feature,
+    floatList_feature,
     int64List_feature,
 )
 
@@ -111,6 +112,9 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
                     "right": int64_feature(int(metadata.get("Laterality") == "R")),
                     "shape": int64List_feature(image.shape),
                     "dicom_id": bytes_feature(dicom_id.encode()),
+                    "Image Position (Patient)": floatList_feature(metadata.get("Image Position (Patient)")),
+                    "Image Orientation (Patient)": floatList_feature(metadata.get("Image Orientation (Patient)")),
+                    "z_bound": floatList_feature(metadata.get("slice_z")),
                 }.items()
             ]
         )

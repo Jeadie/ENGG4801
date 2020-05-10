@@ -14,7 +14,7 @@ from custom_exceptions import (
 from series_filter import SeriesFilter
 
 import util
-
+import sys
 _logger = logging.getLogger()
 
 
@@ -87,12 +87,8 @@ def construct_series(
         if len(dicoms) == 0:
             return None
 
-        # Sort dicoms based on Slice Location tag
-        tag = "Slice Location"
-        data = [(float(dcm[-1].get(tag, 1000)), dcm[0]) for dcm in dicoms]
-
-        data.sort(key=lambda x: x[0])
-        image = np.stack([d[-1] for d in data])
+        dicoms = sort_dicoms(dicoms)
+        image = np.stack([d[0] for d in dicoms])
 
         metadata = construct_metadata([d[-1] for d in dicoms], filter)
         return (image, metadata)
@@ -100,6 +96,32 @@ def construct_series(
         _logger.error(f"An error occurred constructing the series. Error: {str(e)}.")
         raise SeriesConstructionError
 
+def sort_dicoms(dicoms: List[Types.SeriesObj]) -> List[Types.SeriesObj]:
+    """ Sorts a list of DICOMs based on the z location.
+
+    It first attempts to sort based on the DICOM tag, `Slice Location`.
+    Failing this, it sorts on the Z component of `Image Position (Patient)`.
+
+    Args:
+        dicoms: A List of DICOM objects that are assumed to be of the same 3D
+            image.
+
+    Returns:
+          The same list of DICOMs sorted by their z-location.
+    """
+    # Sort dicoms based on Slice Location tag if they all have slice location
+    tag = "Slice Location"
+    if True not in [(sys.maxsize == float(x[-1].get(tag, sys.maxsize))) for x in dicoms]:
+        dicoms.sort(key=lambda x: float(x[-1].get(tag, sys.maxsize)))
+        return dicoms
+    else:
+        _logger.warning(f"Dicoms do not have Slice Location key.")
+        tag = "Image Position (Patient)"
+        if True not in [sys.maxsize == float(x[-1].get(tag, (0,0, sys.maxsize))[-1]) for x in dicoms]:
+            dicoms.sort(key=lambda x: float(x[-1].get(tag, (0,0, sys.maxsize))[-1]))
+        else:
+            _logger.warning(f"Dicoms have no z location data. Series is unsorted.")
+        return dicoms
 
 def construct_metadata(
     dicom_metadata: List[Dict[str, object]], filter: SeriesFilter
@@ -119,8 +141,16 @@ def construct_metadata(
         [set(dicom_metadata[i].keys()) for i in range(len(dicom_metadata))],
     )
 
+
+
     # Convert list of dictionaries into dictionary of lists (key -> List[values])
     metadata = {k: simplify_values(dicom_metadata, k) for k in keys}
+
+    # Get Dicom specific values into a list. i.e. Dicom z positions, etc
+    slice_locations = [float(d.get("Slice Location", sys.maxsize)) for d in dicom_metadata]
+    if len(slice_locations) < 2:
+        slice_locations = [0,0]
+
     return {
         "time": metadata.get("Clinical Trial Time Point ID", "t-1"),
         "flags": filter.get_series_flags(metadata.get("Series Description", "")),
@@ -129,10 +159,13 @@ def construct_metadata(
         "Clinical Trial Subject ID": metadata.get(
             "Clinical Trial Subject ID", "UNKNOWN"
         ),
+        "Laterality": metadata.get("Laterality", ""),
         "Spacing Between Slices": metadata.get("Spacing Between Slices", -1),
         "Modality": metadata.get("Modality", ""),
         "Pixel Spacing": metadata.get("Pixel Spacing", (-1, -1)),
-        "Laterality": metadata.get("Laterality", ""),
+        "Image Position (Patient)": metadata.get("Image Position (Patient)", (-1, -1, -1)),
+        "Image Orientation (Patient)": metadata.get("Image Orientation (Patient)", (0,0,0,0,0,0)),
+        "z_bound" : (slice_locations[0], slice_locations[-1])
     }
 
 

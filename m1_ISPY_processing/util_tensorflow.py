@@ -17,6 +17,10 @@ def float_feature(value: float) -> tf.train.Feature:
     """
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
+def floatList_feature(values: List[float]) -> tf.train.Feature:
+    """ Converts a List of floats into a float_list Tensorflow feature.
+    """
+    return tf.train.Feature(float_list=tf.train.FloatList(value=values))
 
 def int64_feature(value: int) -> tf.train.Feature:
     """ Converts an integer into a int64_list Tensorflow feature.
