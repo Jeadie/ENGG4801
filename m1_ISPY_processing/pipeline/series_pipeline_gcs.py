@@ -8,20 +8,20 @@ import apache_beam as beam
 from apache_beam.pvalue import PCollection
 from apache_beam.pipeline import Pipeline
 
-from custom_types import Types
-from custom_exceptions import (
+from pipeline.custom_types import Types
+from pipeline.custom_exceptions import (
     DICOMAccessError,
     SeriesConstructionError,
     SeriesMetadataError,
 )
-from series_filter import SeriesFilter
+from pipeline.series_filter import SeriesFilter
 
 
 from google.cloud import bigquery, storage
 
-import constants
-import util
-from util_series import convert_series, process_local_DICOM
+import pipeline.constants as constants
+import pipeline.util as util
+from pipeline.util_series import convert_series, process_local_DICOM
 
 _logger = logging.getLogger()
 
@@ -34,9 +34,11 @@ def construct(pipeline: Pipeline, settings) -> PCollection:
     """
     f = SeriesFilter(filter_file=settings[constants.SERIES_DESCRIPTION_PATH])
     if settings.get("SPECIFIC_GCS", None):
+        print("S{ECIFIC GCS", len(settings["SPECIFIC_GCS"]))
         series_paths = pipeline | beam.Create(settings["SPECIFIC_GCS"])
 
     else:
+        print("BAD BOII", settings)
         series_paths = get_all_series(pipeline, settings, f)
         series_paths = series_paths | "Only keep useful Series" >> beam.Filter(
             lambda x: f.filter_series_path(x)

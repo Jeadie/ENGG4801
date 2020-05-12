@@ -1,14 +1,11 @@
-import argparse
-import sys
 from typing import Dict, List
 
 import apache_beam as beam
 from apache_beam.pvalue import PCollection
 from apache_beam.pipeline import Pipeline
 
-import constants
-from constants import CSVHeader
-from util import run_pipeline
+from . import constants
+from .constants import CSVHeader #import CSVHeader
 
 
 def construct(pipeline: Pipeline, argv: Dict[str, object]) -> PCollection:
@@ -21,6 +18,7 @@ def construct(pipeline: Pipeline, argv: Dict[str, object]) -> PCollection:
     Returns:
          The final PCollection from the patient pipeline.
     """
+    print("PATIENTS")
     patients = get_all_patients(pipeline, argv)
     return patients | "Parse + Format patient metadata" >> beam.Map(
         format_patient_metadata
@@ -132,20 +130,3 @@ def flatten_patient_data(patient):
     clinical = patient[1]["clinical"][0]
 
     return [patient_id] + outcomes + clinical
-
-
-def construct_patient_test_pipeline(parsed_args: argparse.Namespace, p: beam.Pipeline):
-    """ Runs a manual test of the Patient Pipeline. Merely prints each element to STDOUT.
-    """
-    output_patient_pipeline = construct(p, vars(parsed_args))
-    _ = output_patient_pipeline | "Print Results" >> beam.Map(
-        lambda x: print(f"Element: {str(x)}")
-    )
-
-
-if __name__ == "__main__":
-    if "--test" in sys.argv:
-        run_pipeline(sys.argv, construct_patient_test_pipeline)
-
-    else:
-        print("Currently, can only run Patient pipeline as test using `--test`.")

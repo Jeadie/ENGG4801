@@ -5,9 +5,9 @@ import apache_beam as beam
 from apache_beam.pvalue import PCollection
 import tensorflow as tf
 
-import constants
-from custom_types import Types
-from util_tensorflow import (
+from . import constants as constants
+from pipeline.custom_types import Types
+from pipeline.util_tensorflow import (
     bytes_feature,
     int64_feature,
     float_feature,
@@ -32,6 +32,7 @@ def construct(
     patient_key = patient | "Create Keyed PCollection for Patient" >> beam.Map(
         lambda x: (str(x["patient_id"]), x)
     )
+    print(studies, patient_key)
     tf_examples = (
         {"studies": studies, "patient": patient_key}
         | "Join Patient and Studies by Patient Key" >> beam.CoGroupByKey()
@@ -63,6 +64,7 @@ def convert_to_tf_example(
     Returns:
         An Example ready to be serialised and saved out of memory (as a TFRecord generally)
     """
+    print(patient_data)
     try:
         data = patient_data[1]
         patient = data["patient"][0]

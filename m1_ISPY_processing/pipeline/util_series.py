@@ -1,20 +1,21 @@
 from functools import reduce
+import sys
 from typing import Callable, Dict, List, Tuple
 import logging
 
 import numpy as np
 import pydicom as dicom
 
-from custom_types import Types
-from custom_exceptions import (
+from pipeline.custom_types import Types
+from pipeline.custom_exceptions import (
     DICOMAccessError,
     SeriesConstructionError,
     SeriesMetadataError,
 )
-from series_filter import SeriesFilter
+from pipeline.series_filter import SeriesFilter
 
-import util
-import sys
+import pipeline.util as util
+
 _logger = logging.getLogger()
 
 

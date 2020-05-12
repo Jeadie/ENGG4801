@@ -55,7 +55,7 @@ class SeriesFilter(object):
         "VOI Breast Tissue Segmentation": ["SEG", "VOI"],
     }
 
-    def __init__(self, filter_file="ISPY1_MetaData.csv"):
+    def __init__(self, filter_file="pipeline/ISPY1_MetaData.csv"):
         self.df = pd.read_csv(filter_file, delimiter=",", header=0)[
             ["Series UID", "Series Description"]
         ]
@@ -63,9 +63,9 @@ class SeriesFilter(object):
     @classmethod
     def batch_series_studies_by_patient(
         cls,
-        descriptions="series_description.csv",
-        series_study_file="series_studies.csv",
-        filter_file="ISPY1_MetaData.csv",
+        descriptions="pipeline/series_description.csv",
+        series_study_file="pipeline/series_studies.csv",
+        filter_file="pipeline/ISPY1_MetaData.csv",
     ) -> List[List[str]]:
         """
 
@@ -98,7 +98,7 @@ class SeriesFilter(object):
 
     @classmethod
     def batch_series_by_patient(
-        cls, lines, filter_file="ISPY1_MetaData.csv"
+        cls, lines, filter_file="pipeline/ISPY1_MetaData.csv"
     ) -> List[List[str]]:
         """
 

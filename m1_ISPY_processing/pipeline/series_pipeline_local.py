@@ -9,13 +9,13 @@ from apache_beam.pvalue import PCollection
 from apache_beam.pipeline import Pipeline
 
 
-import constants
-from series_filter import SeriesFilter
+import pipeline.constants
+from pipeline.series_filter import SeriesFilter
 
-from custom_exceptions import DICOMAccessError
-from custom_types import Types
-import util
-from util_series import convert_series, process_local_DICOM
+from pipeline.custom_exceptions import DICOMAccessError
+from pipeline.custom_types import Types
+import pipeline.util as util
+from pipeline.util_series import convert_series, process_local_DICOM
 
 _logger = logging.getLogger()
 
