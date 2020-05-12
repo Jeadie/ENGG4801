@@ -4,12 +4,9 @@
 export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/gcp-key.json"
 
 # Run command
-python series_pipeline.py --test \
+python test_series.py --test \
     --runner=DirectRunner \
     --num-series=1 \
     --studies-dir="gs://ispy_dataquery/dicoms/" \
     --tfrecord-name="name" \
     --num-shards=2 \
-    --patient-clinical="clinical.csv" \
-    --series-descriptions="ISPY1_MetaData.csv" \
-    --patient-outcomes="outcome.csv" \   

@@ -2,15 +2,16 @@ import argparse
 import os
 import sys
 from typing import Dict, List
+import logging
 
 import apache_beam as beam
 from google.cloud import storage
 
-from merge_and_save_pipeline import construct as MergeSavePipeline
-from patient_pipeline import construct as PatientPipeline
-from series_pipeline_gcs import construct as series_construct
-from series_filter import SeriesFilter
-from studies_pipeline import construct as StudiesPipeline
+from pipeline.merge_and_save_pipeline import construct as MergeSavePipeline
+from pipeline.patient_pipeline import construct as PatientPipeline
+from pipeline.series_pipeline_gcs import construct as SeriesPipeline
+from pipeline.series_filter import SeriesFilter
+from pipeline.studies_pipeline import construct as StudiesPipeline
 from util import run_pipeline
 
 
@@ -20,7 +21,7 @@ def main(argv: List[str]) -> int:
 
 
 def main_pipeline(args: Dict[str, object], p: beam.Pipeline):
-    output_series = series_construct(p, args)
+    output_series = SeriesPipeline(p, args)
     output_patient = PatientPipeline(p, args)
     output_studies = StudiesPipeline(output_series)
     MergeSavePipeline(output_patient, output_studies, args)
@@ -47,7 +48,6 @@ def construct_sequence_pipeline(files, extended_args) -> None:
     def constructor(parsed_args: argparse.Namespace, p: beam.Pipeline) -> None:
         args = vars(parsed_args)
         args = {**args, **extended_args}
-
         # Dynamically get proper series pipeline based on local/gcs studies path.
         main_pipeline(args, p)
 
@@ -89,8 +89,9 @@ def dataflow(argv):
     patient_series = SeriesFilter.batch_series_studies_by_patient()
     flat_series = [item for sublist in patient_series for item in sublist]
     run_pipeline(
-     argv, construct_sequence_pipeline(argv, {"SPECIFIC_SERIES": flat_series})
+     argv, construct_sequence_pipeline(argv, {"SPECIFIC_GCS": flat_series})
     )
+    print("DONE")
 
 def run_sequentially(argv):
     with open("SERIES.csv") as f:
@@ -122,4 +123,13 @@ def run_sequentially(argv):
 
 
 if __name__ == "__main__":
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
     dataflow(sys.argv)
