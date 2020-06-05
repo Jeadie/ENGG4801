@@ -128,8 +128,19 @@ def filter_images(x1, x2, x3, x4, x11, x21, x31, x41, x12, x22, x32, x42, x13, x
         )
 
     # TODO: magically pick the best imaging series from all possible.
-    image = images[0]
+    image = list(map(prepare_image, images))
+    ds = tf.stack(image, axis=0)
+    return ds
 
+def prepare_image(image: tf.Tensor)-> tf.Tensor:
+    """ Prepares an image from the tf.Example.
+
+    Args:
+        image:
+
+    Returns:
+         A slice of a transformed 3D image.
+    """
     # TODO: This must magically pick a single slice from 3D (eventually will have to pick 64x64 too.
     image = tf.transpose(image, [2, 1, 0])
     image_z = image.shape[-1]

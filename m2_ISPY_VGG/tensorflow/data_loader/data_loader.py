@@ -62,9 +62,9 @@ class TFRecordShardLoader(DataLoader):
         Returns:
              A Dataset ready for use in the model.
         """
-        dataset = tf.data.TFRecordDataset(self.file_names).map(
-            map_func=self._parse_example, num_parallel_calls=multiprocessing.cpu_count()
-        )
+        dataset = tf.data.TFRecordDataset(self.file_names).flat_map(map_func=self._parse_example)
+            # , num_parallel_calls=multiprocessing.cpu_count())
+
         # Remove bad examples and enforce shape
         dataset = dataset.filter( lambda x, y: tf.math.reduce_min(x) != -10000)
 
@@ -73,20 +73,26 @@ class TFRecordShardLoader(DataLoader):
         # dataset = dataset.batch(batch_size=self.batch_size)
         return dataset
 
-    def _parse_example(
-            self, _example: tf.Tensor
-    ) -> Tuple[Dict[str, tf.Tensor], tf.Tensor]:
+    def _parse_example(self,_example: tf.Tensor) -> tf.data.Dataset:
+        """ Parses a single saved TFRecord example and parses it to a set of elements to be added to the dataset.
+
+        Flow:
+          * Patient Metadata: parses patient label data from example.
+          * Parses Images: parses all possible imaging tags that could be in the example.
+          * Calculate Label: calculates the label to use, given the patients outcome data.
+          * Create Dataset: creates a dataset object of elements from the Example.
+
+        Args:
+            example: the tfrecord for to read the data from
+
+        Returns:
+            a parsed input example and its respective label
         """
-        Used to read in a single example fr om a tf record file and do any augmentations necessary
-        :param example: the tfrecord for to read the data from
-        :return: a parsed input example and its respective label
-        """
-        # tf.data.Dataset.from_tensor_slices(
         # do parsing on the cpu
         with tf.device("/cpu:0"):
             results = {}
 
-            # Break up required features into groups that may exist together.
+            # Patient metadata
             feature_groups = [
                  {"pCR": tf.io.FixedLenFeature((1), tf.int64, default_value=-1),
                   "RCB": tf.io.FixedLenFeature((1), tf.int64, default_value=-1)},
@@ -96,7 +102,7 @@ class TFRecordShardLoader(DataLoader):
                     (key.replace("image", "shape"), tf.io.FixedLenFeature([3], tf.int64, default_value=3*[-1]))])
                 for key in util.possible_imaging_series_tags()]
 
-            # Parse group by group to avoid a single example not having all specific keys
+            # Parses Images
             for features in feature_groups:
                 try:
                     result = tf.io.parse_single_example(_example, features)
@@ -104,10 +110,6 @@ class TFRecordShardLoader(DataLoader):
                 except Exception as e:
                     # Expected Behaviour
                     continue
-
-            # Get label convert to one-hot
-            group = tf.cast(util.calculate_group_from_results(results["pCR"], results["RCB"]), dtype=tf.uint8)
-            group = tf.one_hot(group - 1, 3)[0, ...]
 
             # Convert shape of images and filter images to get best.
             image_keys = list(filter(lambda x: "image" in x, results.keys()))
@@ -118,24 +120,21 @@ class TFRecordShardLoader(DataLoader):
                         tf.float32)
                 images.append(image)
 
-            image = tf.py_function(
+            images = tf.py_function(
                 util.filter_images, (images),
                 tf.float32)
+            print(images)
+            # Calculates Label
+            group = tf.cast(util.calculate_group_from_results(results["pCR"], results["RCB"]), dtype=tf.uint8)
+            group = tf.one_hot(group - 1, 3)[0, ...]
 
-            return image, group
+            # Create Dataset
+            ds = tf.data.Dataset.from_tensor_slices(images)
+            return ds.map(lambda x: (x, group))
 
-    @staticmethod
-    def _normalise(example: tf.Tensor) -> tf.Tensor:
-        """ Normalise a 3D image as
+            # return image, group
 
-        Args:
-            example:
-        :return:
-        """
-        return example
-
-    @staticmethod
-    def _augment(example: tf.Tensor) -> tf.Tensor:
+    def _augment(self, example: tf.Tensor) -> tf.Tensor:
         """
         Randomly augment the input image to try improve training variance
         Args:
@@ -143,6 +142,9 @@ class TFRecordShardLoader(DataLoader):
         Returns:
             The same input example but possibly augmented
         """
+        # Convert Images
+        # images = tf.linalg.normalize(images, axis=0)
+
         # random rotation
         if random.uniform(0, 1) > 0.5:
             example = tf.contrib.image.rotate(
