@@ -12,7 +12,7 @@ from pipeline.patient_pipeline import construct as PatientPipeline
 from pipeline.series_pipeline_gcs import construct as SeriesPipeline
 from pipeline.series_filter import SeriesFilter
 from pipeline.studies_pipeline import construct as StudiesPipeline
-from util import run_pipeline
+from util import run_pipeline, _parse_argv
 
 
 def main(argv: List[str]) -> int:
@@ -75,7 +75,6 @@ def run_prefetched_series(argv):
             bucket = client.get_bucket("ispy_dataquery")
             for b in os.listdir("output/"):
                 name = f"output/small_{b}_{i}"
-                print(name)
                 blob = bucket.blob(name)
                 blob.upload_from_filename(filename=f"output/{b}")
                 os.remove(f"output/{b}")
@@ -84,43 +83,68 @@ def run_prefetched_series(argv):
         else:
             # Else merely add to series
             lines.extend(p)
+    print(lines)
+
 
 def dataflow(argv):
+    args, pipeline_arg = _parse_argv(argv)
     patient_series = SeriesFilter.batch_series_studies_by_patient()
-    flat_series = [item for sublist in patient_series for item in sublist]
-    run_pipeline(
-     argv, construct_sequence_pipeline(argv, {"SPECIFIC_GCS": flat_series})
-    )
-    print("DONE")
+ #   flat_series = [item for sublist in patient_series for item in sublist]
 
-def run_sequentially(argv):
-    with open("SERIES.csv") as f:
-        lines = [line.rstrip() for line in f]
-    patient_series = SeriesFilter.batch_series_by_patient(lines)
-
-    batch_size = 60
+#    run_pipeline(
+#     argv, construct_sequence_pipeline(argv, {"SPECIFIC_GCS": flat_series})
+#    )
+    batch_size = args.batch_size
     i = 0
     lines = []
-
     for p in patient_series:
         if (len(lines) + len(p)) > batch_size:
-            run_pipeline(
-                argv, construct_sequence_pipeline(argv, {"SPECIFIC_SERIES": lines})
-            )
-            client = storage.Client()
-            bucket = client.get_bucket("ispy_dataquery")
-            for b in os.listdir("output/"):
-                name = f"output/{i}_{b}"
-                print(name)
-                blob = bucket.blob(name)
-                blob.upload_from_filename(filename=f"output/{b}")
-                os.remove(f"output/{b}")
+            run_pipeline_with_gcs(argv, lines, i)
             i += 1
             lines = []
-        else:
-            # Else merely add to series
-            lines.extend(p)
+            return 1
+        lines.extend(p)
 
+    if lines != []:
+        run_pipeline_with_gcs(argv, lines, i)
+
+def run_pipeline_with_gcs(argv, lines, i):
+    run_pipeline(
+        argv, construct_sequence_pipeline(argv, {"SPECIFIC_GCS": lines})
+    )
+    client = storage.Client()
+    bucket = client.get_bucket("ispy_dataquery")
+    for b in os.listdir("data/"):
+        os.rename(f"data/{b}", f"data/{i}_{b}")
+        name = f"output/{i}_{b}"
+        blob = bucket.blob(name)
+        blob.upload_from_filename(filename=f"output/{b}")
+        os.remove(f"output/{b}")
+
+
+def run_sequentially(argv):
+    args, pipeline_arg = _parse_argv(argv)
+    patient_series = SeriesFilter.batch_series_studies_by_patient()# [0:args.num_series]
+ 
+    batch_size = args.batch_size
+    i = 0
+    lines = []
+    for p in patient_series:
+        if (len(lines) + len(p)) > batch_size:
+            run_pipeline_locally(argv, lines, i)
+            i += 1
+            lines = []
+        lines.extend(p)
+
+    if lines != []:
+        run_pipeline_locally(argv, lines, i)
+
+def run_pipeline_with_locally(argv, lines, i):
+    run_pipeline(
+        argv, construct_sequence_pipeline(argv, {"SPECIFIC_GCS": lines})
+    )
+    for b in os.listdir("data/"):
+        os.rename(f"data/{b}", f"data/{i}_{b}")
 
 if __name__ == "__main__":
     root = logging.getLogger()
@@ -128,8 +152,8 @@ if __name__ == "__main__":
     
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(name)s- %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
-    dataflow(sys.argv)
+    run_sequentially(sys.argv)

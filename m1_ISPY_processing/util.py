@@ -26,7 +26,6 @@ def run_pipeline(
     argv, pipeline_arg = _parse_argv(argv)
     with beam.Pipeline(options=PipelineOptions(pipeline_arg)) as main_pipeline:
         construct_pipeline(argv, main_pipeline)
-        print("IN here")
     return 0
 
 
@@ -92,6 +91,14 @@ def _parse_argv(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
         help="Number of shards to save the TFRecord into.",
         default=1,
     )
+    parser.add_argument(
+        f"--{constants.BATCH_SIZE.replace('_', '-')}",
+        dest=constants.BATCH_SIZE,
+        type=int,
+        help="Number of series to run in a single pipeline",
+        default=20,
+    )
+
     parser.add_argument(
         f"--{constants.SERIES_DESCRIPTION_PATH.replace('_', '-')}",
         dest=constants.SERIES_DESCRIPTION_PATH,
