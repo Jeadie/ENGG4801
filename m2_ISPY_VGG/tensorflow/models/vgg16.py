@@ -17,13 +17,6 @@ from base.model import BaseModel
 _logger = absl.logging
 
 class VGG16(BaseModel):
-    def __init__(self, config: dict) -> None:
-        """
-        Create a model used to classify hand written images using the MNIST dataset
-        :param config: global configuration
-        """
-        super().__init__(config)
-
     def model(self) -> tf.Tensor:
         """
         Define your model metrics and architecture, the logic is dependent on the mode.
@@ -62,15 +55,57 @@ class VGG16(BaseModel):
 
         x = Dropout(p_dropout)(x)
         x = Dense(3, activation='softmax', name='predictions')(x)
+    
+        return construct(img_input, x, self.config, name="vgg16")
 
-        model = tf.keras.Model(inputs=img_input, outputs=x, name='vgg16')
-        model.compile(
-            optimizer=tf.keras.optimizers.Nadam(lr=self.config.get("learning_rate", 0.002)),
-            loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
-            metrics=['accuracy'],
+class babyVGG16(BaseModel):
+    def model(self) -> tf.Tensor:
+        """
+        Define your model metrics and architecture, the logic is dependent on the mode.
+        :param features: A dictionary of potential inputs for your model
+        :param labels: Input label set
+        :param mode: Current training mode (train, test, predict)
+        :return: An estimator spec used by the higher level API
+        """
+        activation = self.config.get("activation", "relu")
+        padding = self.config.get("padding", "same")
+        p_dropout = self.config.get("p_dropout", 0.25)
+        dense_units = 10
+        _logger.info(
+            f"Building model with parameters: \n"
+            f"Activation: {activation}\n"
+            f"Padding Scheme: {padding}\n"
+            f"Dropout: {p_dropout}\n"
+            f"Dense units: {dense_units}\n"
         )
-        return model
 
+        input_shape = (256, 256, 1)
+        img_input = Input(shape=input_shape)
+        
+        x = _vgg_block(img_input, 64, 2, activation, padding, "block1")
+        x = _vgg_block(x, 32, 2, activation, padding, "block2")
+        x = _vgg_block(x, 16, 2, activation, padding, "block3")
+
+        # Classification block
+        x = Flatten(name='flatten')(x)
+        x = Dense(dense_units,
+                  activation=activation,
+                  name='fc1',
+                  kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
+
+        x = Dropout(p_dropout)(x)
+        x = Dense(3, activation='softmax', name='predictions')(x)
+    
+        return construct(img_input, x, self.config, name="vgg16")
+
+def construct(image, output, configuration, name=""):
+    model = tf.keras.Model(inputs=image, outputs=output, name=name)
+    model.compile(
+        optimizer=tf.keras.optimizers.Nadam(lr=configuration.get("learning_rate", 0.002)),
+        loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+        metrics=['accuracy'],
+    )
+    return model
 
 def _vgg_block(x: tf.Tensor, filters: int, convs: int, activation: str, padding: str, name: str, p_dropout: float = -1) -> tf.Tensor:
     for c in range(convs):

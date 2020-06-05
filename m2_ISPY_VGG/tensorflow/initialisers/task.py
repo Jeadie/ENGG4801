@@ -1,5 +1,5 @@
 from data_loader.data_loader import TFRecordShardLoader
-from models.vgg16 import VGG16
+from models.vgg16 import VGG16, babyVGG16
 from trainers.trainer import Trainer
 from utils.utils import get_args, process_config
 
@@ -17,7 +17,7 @@ def init() -> None:
     config = {**config, **args}
 
     # initialise model
-    model = VGG16(config)
+    model = babyVGG16(config)
     # create your data generators for each mode
     train_data = TFRecordShardLoader(config, mode="train")
 
