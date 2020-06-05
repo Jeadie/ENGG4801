@@ -33,6 +33,12 @@ def get_args() -> dict:
         required=True,
     )
     parser.add_argument(
+        "--use-stack",
+        help="Use the maximal amount of central image slices from a Series." ,
+        type=bool,
+        default=True,
+    )
+    parser.add_argument(
         "--train-batch-size", help="Batch size for training steps", type=int, default=32
     )
     parser.add_argument(

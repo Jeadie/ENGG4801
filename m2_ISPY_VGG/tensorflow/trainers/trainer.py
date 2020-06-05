@@ -52,6 +52,9 @@ class Trainer(BaseTrain):
         model.summary()
 
         dataset = self.train.input_fn()
+        if not self.config["use_stack"]:
+            dataset.map(lambda img, label: ( tf.expand_dims(img[..., img.shape[-1]//2]), label))
+        else:
 
         # Send input images to Tensorboard
         # dataset = dataset.map(lambda x,y: self.tensorboard_aids(x,y, log_file = self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S")))

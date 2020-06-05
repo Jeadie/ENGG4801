@@ -70,7 +70,7 @@ class babyVGG16(BaseModel):
         activation = self.config.get("activation", "relu")
         padding = self.config.get("padding", "same")
         p_dropout = self.config.get("p_dropout", 0.25)
-        dense_units = 10
+        dense_units = 20
         _logger.info(
             f"Building model with parameters: \n"
             f"Activation: {activation}\n"
@@ -78,8 +78,11 @@ class babyVGG16(BaseModel):
             f"Dropout: {p_dropout}\n"
             f"Dense units: {dense_units}\n"
         )
+        if self.config["use_stack"]:
+            input_shape = (256, 256, 14)
+        else:
+            input_shape = (256, 256, 1)
 
-        input_shape = (256, 256, 14)
         img_input = Input(shape=input_shape)
         
         x = _vgg_block(img_input, 64, 2, activation, padding, "block1")
