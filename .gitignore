@@ -3,6 +3,8 @@
 *.dcm
 *.tcia
 *.tfrecords
+.idea*
+*xlsx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
