@@ -2,11 +2,33 @@ from typing import List, Tuple
 
 import pandas as pd
 
+NO = ["DWSSFSE Diffusion"]
 
 class SeriesFilter(object):
     """ Object responsible for filtering series based on user requirements."""
-
     USED_MRI = {
+        "2-FSE-Sagittal": ["MRI", "SAG", "FSE"],
+        "T2 right breast": ["MRI", "SAG", "T2" "RIGHT"],
+        "ACRIN_6657/FL3D_T1_SAG_CA_": ["MRI", "FL3D", "T1", "SAG"],
+        "T2 left breast": ["MRI", "SAG", "T2" "LEFT"],
+        "T1 right breast": ["MRI", "SAG", "T1" "RIGHT"],
+        "T1 left breast": ["MRI", "SAG", "T1" "LEFT"],
+        "uni sag t2 fse_L": ["MRI", "SAG", "T2" "LEFT", "FSE"],
+        "RT IR-SPGR SAG": ["MRI", "SAG", "RIGHT"],
+        "ACRIN_6657/FSE_T2_SAG_NO_F": ["MRI", "SAG", "FSE", "T2"],
+        "ACRIN_6657/FSE_T2_SAG_FS_C": ["MRI", "SAG", "FSE", "T2"],
+        "LT Sag T1": ["MRI", "SAG", "T1", "LEFT"],
+        "RT Sag T1": ["MRI", "SAG", "T1", "RIGHT"],
+        "RT Sag FSE T2 - FatSat": ["MRI", "SAG", "T2", "RIGHT", "FSE"],
+        "T2-FSE-Unilat.-Sagittal": ["MRI", "SAG", "T2", "FSE"],
+        "LT IR-SPGR SAG": ["MRI", "SAG", "LEFT"],
+        "LT Sag FSE T2 - FatSat": ["MRI", "SAG", "T2", "LEFT"],
+        "fl3d_sag_uni_R": ["MRI", "SAG"],
+        "uni sag t2 fse": ["MRI", "SAG", "T2", "FSE"],
+        "ACRIN_6657/FL3D_T1_SAG_CA": ["MRI", "T1", "SAG"]
+    }
+
+    OLD_BOIS = {
         "fl3d_sag_uni_R": ["MRI", "FL3D", "SAG", "RIGHT"],
         "ACRIN_6657/FL3D_T1_SAG_CA_": ["MRI", "FL3D", "T1", "SAG"],
         "fl3d_sag_uni_L": ["MRI", "FL3D", "SAG", "LEFT"],
@@ -48,19 +70,25 @@ class SeriesFilter(object):
         "BRSTCA SENSFS3DSAG 6DYN": ["MRI", "SAG"],
         "NCI/HIGH_RES_SAG": ["MRI", "SAG"],
         "ACRIN_6657/LEFTFL3D_T1_SAG": ["MRI", "FL3D", "T1", "SAG", "LEFT"],
+        "5": ["MRI", "FL3D", "T1", "SAG", "LEFT"],
     }
     USED_SEG = {
         "Breast Tissue Segmentation": ["Tissue", "SEG"],
         "VOI Breast Tissue Segmentation": ["SEG", "VOI"],
     }
 
-    def __init__(self, filter_file="ISPY1_MetaData.csv"):
+    def __init__(self, filter_file="pipeline/ISPY1_MetaData.csv"):
         self.df = pd.read_csv(filter_file, delimiter=",", header=0)[
             ["Series UID", "Series Description"]
         ]
 
     @classmethod
-    def batch_series_studies_by_patient(cls, descriptions="series_description.csv", series_study_file="series_studies.csv", filter_file="ISPY1_MetaData.csv") -> List[List[str]]:
+    def batch_series_studies_by_patient(
+            cls,
+            descriptions="pipeline/series_description.csv",
+            series_study_file="pipeline/series_studies.csv",
+            filter_file="pipeline/ISPY1_MetaData.csv",
+    ) -> List[List[str]]:
         """
 
         :return:
@@ -71,19 +99,29 @@ class SeriesFilter(object):
         data = pd.read_csv(series_study_file, delimiter=",", header=0)
         descriptions = pd.read_csv(descriptions, delimiter=",", header=0)
 
-
         df = df.rename(columns={"Series UID": "SeriesInstanceUID"})
         result = pd.merge(df, data, on=["SeriesInstanceUID", "SeriesInstanceUID"])
         result = result[["Patient Id", "StudyInstanceUID", "SeriesInstanceUID"]]
-        descriptions = descriptions[descriptions["SeriesDescription"].isin(list(SeriesFilter.USED_SEG.keys()) + list(SeriesFilter.USED_MRI.keys()))]
+        descriptions = descriptions[
+            descriptions["SeriesDescription"].isin(
+                list(SeriesFilter.USED_SEG.keys()) + list(SeriesFilter.USED_MRI.keys())
+            )
+        ]
 
-        result = result[result.SeriesInstanceUID.isin(descriptions["SeriesInstanceUID"])]
-        result["gs_path"] = result.apply(lambda x: f"gs://ispy_dataquery/dicoms/{x['StudyInstanceUID']}/{x['SeriesInstanceUID']}/", axis=1)
+        result = result[
+            result.SeriesInstanceUID.isin(descriptions["SeriesInstanceUID"])
+        ]
+        result["gs_path"] = result.apply(
+            lambda x: f"gs://ispy_dataquery/dicoms/{x['StudyInstanceUID']}/{x['SeriesInstanceUID']}/",
+            axis=1,
+        )
         result = dict(result.groupby("Patient Id")["gs_path"].apply(list))
         return list(result.values())
 
     @classmethod
-    def batch_series_by_patient(cls, lines, filter_file="ISPY1_MetaData.csv") -> List[List[str]]:
+    def batch_series_by_patient(
+            cls, lines, filter_file="pipeline/ISPY1_MetaData.csv"
+    ) -> List[List[str]]:
         """
 
         :return:
@@ -107,21 +145,24 @@ class SeriesFilter(object):
         if series_description.count() == 0:
             return False
 
-        print("series_description", list(series_description))
-        return (
-                list(series_description)[0] in SeriesFilter.USED_SEG.keys()
-                or list(series_description)[0] in SeriesFilter.USED_MRI.keys()
-        )
+        return list(series_description)[0] in SeriesFilter.USED_MRI.keys()
+        # return (
+        #         list(series_description)[0] in SeriesFilter.USED_SEG.keys()
+        #         or list(series_description)[0] in SeriesFilter.USED_MRI.keys()
+        # )
 
     def get_series_flags(self, description: str) -> List[str]:
         """ Gets appropriate set of flags for a type of series.
-
         Args:
             description: The description of the Series.
-
         Return:
             A list of flags relevant to the Series.
         """
-        return SeriesFilter.USED_SEG.get(
-            description, SeriesFilter.USED_MRI.get(description, "")
-        )
+        d = description.replace("ACRIN_6657/", "")
+        for i in [".", "-", " ", ","]:
+            d = d.replace(i, "_")
+        return [d.upper()]
+
+        # return SeriesFilter.USED_SEG.get(
+        #     description, SeriesFilter.USED_MRI.get(description, "")
+        # )

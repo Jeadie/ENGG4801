@@ -2,7 +2,7 @@ from enum import Enum
 
 import pydicom as dicom
 
-from util import construct_metadata_from_DICOM_dictionary
+from . import util # .util as util #import construct_metadata_from_DICOM_dictionary
 
 # TODO: Consider turning these into an Enum.
 ####################################
@@ -11,10 +11,11 @@ from util import construct_metadata_from_DICOM_dictionary
 PATIENT_OUTCOME_CSV_FILE_KEY = "patient_outcomes"
 PATIENT_CLINICAL_CSV_FILE_KEY = "patient_clinical"
 STUDIES_PATH = "studies_dir"
-SERIES_LIMIT = "num-series"
+SERIES_LIMIT = "num_series"
+BATCH_SIZE = "batch_size"
 TFRECORD_NAME = "tfrecord_name"
 NUM_TFRECORD_SHARDS = "num_shards"
-SERIES_DESCRIPTION_PATH="series_descriptions"
+SERIES_DESCRIPTION_PATH = "series_descriptions"
 ####################################
 # MERGE+SAVE PIPELINE CONSTANTS ##
 ####################################
@@ -24,7 +25,6 @@ TFRECORD_SUFFIX = ".tfrecords"
 ####################################
 # SERIES PIPELINE CONSTANTS ####
 ####################################
-LOCAL_SERIES_FILTER_FILE = "ISPY1_MetaData.csv"
 GCS_PREFIX = "gs://"
 BIGQUERY_STUDY_ID_HEADER = "StudyInstanceUID"
 BIGQUERY_SERIES_ID_HEADER = "SeriesInstanceUID"
@@ -58,7 +58,7 @@ DICOM_TYPE_CONVERSION = {
     dicom.valuerep.DSfloat: float,
     dicom.valuerep.IS: int,
     dicom.valuerep.PersonName3: str,
-    dicom.dataset.Dataset: construct_metadata_from_DICOM_dictionary,
+    dicom.dataset.Dataset: util.construct_metadata_from_DICOM_dictionary,
     dicom.multival.MultiValue: test_multivalue,
     dicom.uid.UID: str,
     bytes: lambda x: x.decode(),

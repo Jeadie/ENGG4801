@@ -3,7 +3,7 @@ import sys
 
 import apache_beam as beam
 
-from series_pipeline_gcs import construct
+from pipeline.series_pipeline_gcs import construct
 import util
 
 

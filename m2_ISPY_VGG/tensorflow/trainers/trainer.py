@@ -1,8 +1,10 @@
-from base.trainer import BaseTrain
 import tensorflow as tf
+from datetime import datetime
+
+from base.trainer import BaseTrain
 from models.vgg16 import VGG16
 from data_loader.data_loader import TFRecordShardLoader
-from typing import Callable
+import matplotlib.pyplot as plt
 
 
 class Trainer(BaseTrain):
@@ -14,86 +16,58 @@ class Trainer(BaseTrain):
         val: TFRecordShardLoader,
         pred: TFRecordShardLoader,
     ) -> None:
-        """
-        This function will generally remain unchanged, it is used to train and
-        export the model. The only part which may change is the run
-        configuration, and possibly which execution to use (training, eval etc)
-        :param config: global configuration
-        :param model: input function used to initialise model
-        :param train: the training dataset
-        :param val: the evaluation dataset
-        :param pred: the prediction dataset
+        """ Constructor.
+
+        Args:
+            config: global configuration
+            model: input function used to initialise model
+            train: the training dataset
+            val: the evaluation dataset
+            pred: the prediction dataset
         """
         super().__init__(config, model, train, val, pred)
 
+    def tensorboard_aids(self, image, label, log_file = "./"):
+        """
+
+        Args:
+            image:
+            label:
+        returns
+        """
+        writer = tf.summary.create_file_writer(log_file)
+        with writer.as_default():
+            tf.summary.image("input_image", image, step=0)
+            tf.summary.histogram("input_image", image,step=0)
+            
+            # Convert one-hot to class label to plot.
+            tf.summary.histogram("class_label", tf.math.argmax(label), step=0)
+
+        return (image, label)
+
     def run(self) -> None:
-        # # allow memory usage to me scaled based on usage
-        # config = tf.compat.v1.ConfigProto()
-        # config.gpu_options.allow_growth = True
-        #
-        # # get number of steps required for one pass of data
-        # steps_pre_epoch = len(self.train) / self.config["train_batch_size"]
-        # # save_checkpoints_steps is number of batches before eval
-        # run_config = tf.estimator.RunConfig(
-        #     session_config=config,
-        #     save_checkpoints_steps=steps_pre_epoch
-        #     * 10,  # number of batches before eval/checkpoint
-        #     log_step_count_steps=steps_pre_epoch,  # number of steps in epoch
-        # )
-        # # set output directory
-        # run_config = run_config.replace(model_dir=self.config["job_dir"])
 
         # intialise the estimator with your model
         model = self.model.model()
+        model.summary()
+
         dataset = self.train.input_fn()
-        print(dataset)
-        history = model.fit(dataset)
 
-        print(history)
-        print(history.history)
-        # # create train and eval specs for estimator
-        # train_spec = tf.estimator.TrainSpec(
-        #     lambda: self.train.input_fn(),
-        #     max_steps=self.config["num_epochs"] * steps_pre_epoch,
-        # )
-        #
-        # eval_spec = tf.estimator.EvalSpec(lambda: self.val.input_fn())
-        #
-        # # initialise a wrapper to do training and evaluation, this also handles exporting checkpoints/tensorboard info
-        # tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-        #
-        # # after training export the final model for use in tensorflow serving
-        # self._export_model(estimator, self.config["export_path"])
-        #
-        # # get results after training and exporting model
-        # self._predict(estimator, self.pred.input_fn)
+        # Send input images to Tensorboard
+        # dataset = dataset.map(lambda x,y: self.tensorboard_aids(x,y, log_file = self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S")))
 
-    def _export_model(
-        self, estimator: tf.estimator.Estimator, save_location: str
-    ) -> None:
-        """
-        Used to export your model in a format that can be used with
-        Tf.Serving
-        :param estimator: your estimator function
-        """
-        # this should match the input shape of your model
-        x1 = tf.feature_column.numeric_column(
-            "input", shape=[self.config["batch_size"], 28, 28, 1]
+        model.fit(
+            dataset,
+            callbacks=[
+                tf.keras.callbacks.TensorBoard(
+                    log_dir=self.config["job_dir"],
+                    histogram_freq=1,
+                    # write_images=True # Odd error currently
+                ),
+                tf.keras.callbacks.History()
+            ]
         )
-        # create a list in case you have more than one input
-        feature_columns = [x1]
-        feature_spec = tf.feature_column.make_parse_example_spec(feature_columns)
-        export_input_fn = tf.estimator.export.build_parsing_serving_input_receiver_fn(
-            feature_spec
+        print(
+            f"Model History: {model.history}"
         )
-        # export the saved model
-        estimator.export_savedmodel(save_location, export_input_fn)
 
-    def _predict(self, estimator: tf.estimator.Estimator, pred_fn: Callable) -> list:
-        """
-        Function to yield prediction results from the model
-        :param estimator: your estimator function
-        :param pred_fn: input_fn associated with prediction dataset
-        :return: a list containing a prediction for each batch in the dataset
-        """
-        return list(estimator.predict(input_fn=pred_fn, yield_single_examples=False))

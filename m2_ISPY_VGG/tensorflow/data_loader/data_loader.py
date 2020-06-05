@@ -4,14 +4,17 @@ import random
 from typing import Dict, List, Tuple
 
 import tensorflow as tf
+import absl
 
 from base.data_loader import DataLoader
 import data_loader.util as util
 
+_logger = absl.logging
 
 class TFRecordShardLoader(DataLoader):
     SHARD_SUFFIX = ".tfrecords"
-    def __init__(self, config: dict, mode: str) -> None:
+
+    def __init__(self, config: Dict, mode: str) -> None:
         """
         An example of how to create a dataset using tfrecords inputs
         :param config: global configuration
@@ -28,6 +31,7 @@ class TFRecordShardLoader(DataLoader):
             self.batch_size = self.config["eval_batch_size"]
         else:
             self.file_names = TFRecordShardLoader.get_file_or_files(self.config["test_files"])
+            self.batch_size = 1
 
     @staticmethod
     def get_file_or_files(paths: List[str]) -> List[str]:
@@ -41,11 +45,12 @@ class TFRecordShardLoader(DataLoader):
             If a file and valid suffix, returns the file in a list. Otherwise
             returns all files in the directory with appropriate suffix.
         """
+        files = []
         for p in paths:
             if os.path.isdir(p):
-                files = os.listdir(p)
+                files.extend([f"{p}{x}" for x in os.listdir(p)])
             else:
-                files = [p]
+                files.append(p)
         return list(filter(lambda x: x.endswith(TFRecordShardLoader.SHARD_SUFFIX), files))
 
     def input_fn(self) -> tf.data.Dataset:
@@ -60,53 +65,64 @@ class TFRecordShardLoader(DataLoader):
         dataset = tf.data.TFRecordDataset(self.file_names).map(
             map_func=self._parse_example, num_parallel_calls=multiprocessing.cpu_count()
         )
+        # Remove bad examples and enforce shape
+        dataset = dataset.filter( lambda x, y: tf.math.reduce_min(x) != -10000)
 
-        # only shuffle training data
-        if self.mode == "train":
-            # shuffles and repeats a Dataset returning a new permutation for each epoch. with serialised compatibility
-            dataset = dataset.shuffle(max(len(self) // self.config["train_batch_size"], 2))
-        else:
-            dataset = dataset.repeat(self.config["num_epochs"])
-        # create batches of data
-        print(max(len(self) // self.config["train_batch_size"], 2), "self.batch_size", self.batch_size)
-        dataset = dataset.batch(batch_size=self.batch_size)
+        # Not batching yet, expand dims.
+        dataset = dataset.map(lambda image, label: (tf.reshape(image, [-1, 256, 256, 1]), tf.reshape(label, [-1, 3])))
+        # dataset = dataset.batch(batch_size=self.batch_size)
         return dataset
 
     def _parse_example(
             self, _example: tf.Tensor
     ) -> Tuple[Dict[str, tf.Tensor], tf.Tensor]:
         """
-        Used to read in a single example from a tf record file and do any augmentations necessary
+        Used to read in a single example fr om a tf record file and do any augmentations necessary
         :param example: the tfrecord for to read the data from
         :return: a parsed input example and its respective label
         """
+        # tf.data.Dataset.from_tensor_slices(
         # do parsing on the cpu
         with tf.device("/cpu:0"):
-            features = {
-                **{"group": tf.io.FixedLenFeature(shape=[1], dtype=tf.int64)},
-                **dict([
-                    (key, tf.io.VarLenFeature(tf.int64)) for key in util.required_imaging_series()
-                ]),
-                **dict([
-                    (key.replace("image", "shape"), tf.io.FixedLenFeature([3], tf.int64)) for key in
-                    util.required_imaging_series()
-                ]),
-            }
-            example = tf.io.parse_single_example(_example, features)
+            results = {}
 
-            result = {}
-            for image_key in util.required_imaging_series():
-                result[image_key] = tf.py_function(
-                    util.reconstruct_image, (example[image_key].values, example[image_key.replace("image", "shape")]),
-                    tf.int64)
-            print("result", result)
-            image = result["time1/MRI_DCE/image"]
+            # Break up required features into groups that may exist together.
+            feature_groups = [
+                 {"pCR": tf.io.FixedLenFeature((1), tf.int64, default_value=-1),
+                  "RCB": tf.io.FixedLenFeature((1), tf.int64, default_value=-1)},
+             ] + [
+                dict([
+                    (key, tf.io.VarLenFeature(tf.int64)),
+                    (key.replace("image", "shape"), tf.io.FixedLenFeature([3], tf.int64, default_value=3*[-1]))])
+                for key in util.possible_imaging_series_tags()]
 
-            # TODO: This must magically pick a single slice from 3D (eventually will have to pick 64x64 too.
-            image = tf.transpose(image, [2, 1, 0])
-            image = tf.expand_dims(image[..., 0], -1)
-            return image, tf.one_hot(example["group"] - 1, 3)[0, ...]
+            # Parse group by group to avoid a single example not having all specific keys
+            for features in feature_groups:
+                try:
+                    result = tf.io.parse_single_example(_example, features)
+                    results.update(result)
+                except Exception as e:
+                    # Expected Behaviour
+                    continue
 
+            # Get label convert to one-hot
+            group = tf.cast(util.calculate_group_from_results(results["pCR"], results["RCB"]), dtype=tf.uint8)
+            group = tf.one_hot(group - 1, 3)[0, ...]
+
+            # Convert shape of images and filter images to get best.
+            image_keys = list(filter(lambda x: "image" in x, results.keys()))
+            images = []
+            for image_key in image_keys:
+                image = tf.py_function(
+                        util.reconstruct_image, (results[image_key].values, results[image_key.replace("image", "shape")]),
+                        tf.float32)
+                images.append(image)
+
+            image = tf.py_function(
+                util.filter_images, (images),
+                tf.float32)
+
+            return image, group
 
     @staticmethod
     def _normalise(example: tf.Tensor) -> tf.Tensor:
