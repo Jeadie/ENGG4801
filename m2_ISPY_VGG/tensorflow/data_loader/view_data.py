@@ -25,7 +25,6 @@ def main(args: List[str]) -> None:
     for raw in iter(tf.data.TFRecordDataset(args[1:])):
         patient_details, image_stacks = get_images(raw)
         _logger.info(f"Patient details: {patient_details}")
-        print(f"Patient details: {patient_details}")
         for name, image in image_stacks:
             visualise_image(name, image)
 
@@ -44,7 +43,7 @@ def visualise_image(name: str, image: np.array) -> None:
     Returns:
         None
     """
-    return None
+    image = tf.cast(image, tf.int32)
     for j in range(image.shape[0]):
         plt.imshow(image[j, ...], cmap="gray")
         plt.title(f"Name of series: {name}")
