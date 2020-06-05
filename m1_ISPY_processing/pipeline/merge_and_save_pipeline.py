@@ -32,17 +32,12 @@ def construct(
     patient_key = patient | "Create Keyed PCollection for Patient" >> beam.Map(
         lambda x: (str(x["patient_id"]), x)
     )
-    print(studies, patient_key)
     tf_examples = (
         {"studies": studies, "patient": patient_key}
         | "Join Patient and Studies by Patient Key" >> beam.CoGroupByKey()
         | "Filter out Patients without Images or vice versa"
         >> beam.Filter(lambda x: (x[1]["studies"] != []))
         | "Convert to tf.Examples" >> beam.Map(convert_to_tf_example)
-    )
-
-    (
-        tf_examples
         | "Serialise tf.Example" >> beam.Map(lambda x: x.SerializeToString())
         | "Save to TFRecord"
         >> beam.io.WriteToTFRecord(
@@ -64,11 +59,11 @@ def convert_to_tf_example(
     Returns:
         An Example ready to be serialised and saved out of memory (as a TFRecord generally)
     """
-    print(patient_data)
     try:
         data = patient_data[1]
         patient = data["patient"][0]
         studies = data["studies"][0]
+    
         features = convert_patient_to_feature(patient)
         for study_id, study in studies:
             study_data = convert_study_to_feature(study)
@@ -80,6 +75,19 @@ def convert_to_tf_example(
             f"Error occurred when creating a TFRecord. patient_data: {data.get('patient', data)}. Error: {e}."
         )
         return tf.train.Example(features=tf.train.Features(feature={}),)
+
+
+def convert_study_to_feature(study: List[Types.SeriesObj]) -> List[Dict[str, tf.train.Feature]]:
+    """ Convert a single Study (parsed differently to a Types.StudyObj) into a list of
+        feature dictionaries, each corresponding to a single Series.
+
+    Args:
+        Study: A list of Series objects.
+
+    Returns:
+        A list of Series feature dictionaries.
+    """
+    return [convert_series_to_feature(s) for s in study]
 
 
 def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Feature]:
@@ -106,7 +114,7 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
             [
                 (f"{name}{k}", v)
                 for (k, v) in {
-                    "image": int64List_feature(image.flatten().tolist()),
+                    "image": floatList_feature(image.flatten().tolist()),
                     "dx": float_feature(metadata.get("Pixel Spacing")[0]),
                     "dy": float_feature(metadata.get("Pixel Spacing")[1]),
                     "dz": float_feature(metadata.get("Spacing Between Slices")),
@@ -125,21 +133,6 @@ def convert_series_to_feature(series: Types.SeriesObj,) -> Dict[str, tf.train.Fe
             f"Error making Series Features. Series meta: {metadata}. Error: {str(e)}"
         )
         return {}
-
-
-def convert_study_to_feature(
-    study: List[Types.SeriesObj],
-) -> List[Dict[str, tf.train.Feature]]:
-    """ Convert a single Study (parsed differently to a Types.StudyObj) into a list of
-        feature dictionaries, each corresponding to a single Series.
-
-    Args:
-        Study: A list of Series objects.
-
-    Returns:
-        A list of Series feature dictionaries.
-    """
-    return [convert_series_to_feature(s) for s in study]
 
 
 def convert_patient_to_feature(

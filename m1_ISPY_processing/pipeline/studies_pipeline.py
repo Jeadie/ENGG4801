@@ -1,13 +1,9 @@
-import argparse
-import sys
-from typing import Dict, Tuple
+from typing import Tuple
 
 import apache_beam as beam
 from apache_beam.pvalue import PCollection
 
-import pipeline.constants as constants
 from pipeline.custom_types import Types
-import pipeline.util as util
 
 
 def construct(series_collection: PCollection) -> PCollection:
@@ -39,4 +35,4 @@ def parse_patient_from_study(study: Types.StudyObj) -> Tuple[str, Types.StudyObj
         study: A single Study Object.
     A keyed element Tuple of the form (Patient ID, Study Object).
     """
-    return (study[1][0][1].pop("Clinical Trial Subject ID"), study)
+    return (study[1][0][1].get("Clinical Trial Subject ID"), study)

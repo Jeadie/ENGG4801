@@ -34,11 +34,9 @@ def construct(pipeline: Pipeline, settings) -> PCollection:
     """
     f = SeriesFilter(filter_file=settings[constants.SERIES_DESCRIPTION_PATH])
     if settings.get("SPECIFIC_GCS", None):
-        print("S{ECIFIC GCS", len(settings["SPECIFIC_GCS"]))
         series_paths = pipeline | beam.Create(settings["SPECIFIC_GCS"])
 
     else:
-        print("BAD BOII", settings)
         series_paths = get_all_series(pipeline, settings, f)
         series_paths = series_paths | "Only keep useful Series" >> beam.Filter(
             lambda x: f.filter_series_path(x)
