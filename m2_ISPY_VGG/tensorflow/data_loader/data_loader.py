@@ -69,7 +69,8 @@ class TFRecordShardLoader(DataLoader):
         dataset = dataset.filter( lambda x, y: tf.math.reduce_min(x) != -10000)
 
         # Not batching yet, expand dims.
-        dataset = dataset.map(lambda image, label: (tf.reshape(image, [-1, 256, 256, 1]), tf.reshape(label, [-1, 3])))
+        dataset = dataset.map(lambda image, label: (tf.reshape(image, [-1, 256, 256, 14]), tf.reshape(label, [-1, 3])))
+        print(dataset)
         # dataset = dataset.batch(batch_size=self.batch_size)
         return dataset
 
@@ -123,7 +124,8 @@ class TFRecordShardLoader(DataLoader):
             images = tf.py_function(
                 util.filter_images, (images),
                 tf.float32)
-            print(images)
+
+            print("AFTER PYFCUNG", images.shape)
             # Calculates Label
             group = tf.cast(util.calculate_group_from_results(results["pCR"], results["RCB"]), dtype=tf.uint8)
             group = tf.one_hot(group - 1, 3)[0, ...]

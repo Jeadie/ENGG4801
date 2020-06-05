@@ -37,7 +37,7 @@ class VGG16(BaseModel):
             f"Dense units: {dense_units}\n"
         )
 
-        input_shape = (256, 256, 1)
+        input_shape = (256, 256, 19)
         img_input = Input(shape=input_shape)
         
         x = _vgg_block(img_input, 64, 2, activation, padding, "block1")
@@ -79,7 +79,7 @@ class babyVGG16(BaseModel):
             f"Dense units: {dense_units}\n"
         )
 
-        input_shape = (256, 256, 1)
+        input_shape = (256, 256, 14)
         img_input = Input(shape=input_shape)
         
         x = _vgg_block(img_input, 64, 2, activation, padding, "block1")

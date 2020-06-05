@@ -145,10 +145,11 @@ def prepare_image(image: tf.Tensor)-> tf.Tensor:
     image = tf.transpose(image, [2, 1, 0])
     image_z = image.shape[-1]
 
-    image = tf.expand_dims(image[..., image_z//2], -1)
+    image = image[..., (image_z//2 - 7 ):(image_z//2 + 7) ] #
 
-    if image.shape != (256, 256, 1):
+    if image.shape != (256, 256, 14):
         image = tf.image.resize(image, (256, 256))
+
     return image
 
 def calculate_group_from_results(pCR: Union[int, tf.Tensor], RCB: Union[int, tf.Tensor]) -> Union[int, tf.Tensor]:
