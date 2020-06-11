@@ -10,9 +10,9 @@ if [ "$1" != "--job" ]; then
     LEARNING_RATE=0.002
     EPOCHS=1
 
-    prefix="example"
-    now=$(date +"%Y%m%d_%H_%M_%S")
-    JOB_NAME="$ENV_NAME"-"$prefix"_"$now"
+    prefix="$1"
+    
+    JOB_NAME="$prefix_$(date +'%Y%m%d_%H_%M_%S')"
     JOB_DIR="$(pwd)/${OUTPUT_DIR}"
 
     # locations locally or on the cloud for your files
@@ -30,6 +30,7 @@ fi
 
 python3 -m initialisers.task \
         --job-dir ${JOB_DIR} \
+        --job-name ${JOB_NAME} \
         --train-batch-size ${TRAIN_BATCH} \
         --eval-batch-size ${EVAL_BATCH} \
         --learning-rate ${LEARNING_RATE} \

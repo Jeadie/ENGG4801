@@ -63,26 +63,23 @@ class Trainer(BaseTrain):
             imgs.append(img)
             lbls.append(lbl)
 
+        log_name =  self.config["job_dir"] + "train/" + self.config["job_name"] + datetime.now().strftime("%Y%m%d-%H%M%S")
+
         # visualise_image("name", tf.transpose(tf.concat(imgs, -1), [3, 1,2, 0])[...,0])
-        self.tensorboard_aids( tf.concat(imgs, -1), tf.stack(lbls), log_file= self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+        self.tensorboard_aids( tf.concat(imgs, -1), tf.stack(lbls), log_file= log_name)
 
         if not self.config["use_stack"]:
             dataset = dataset.map(lambda img, label: ( tf.expand_dims(img[..., img.shape[-1]//2], axis=-1), label))
-
-        # Send input images to Tensorboard
- #       dataset = dataset.map(lambda x,y: self.tensorboard_aids(x,y, log_file = self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S")))
-        
-        return
 
         model.fit(
             dataset,
             epochs=self.config["num_epochs"],
             callbacks=[
-#                tf.keras.callbacks.TensorBoard(
-#                    log_dir=self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S"),
-#                    histogram_freq=1,
-#                  write_images=True # Odd error currently
-#                ),
+                tf.keras.callbacks.TensorBoard(
+                    log_dir=log_name
+                    histogram_freq=1,
+                  write_images=True # Odd error currently
+                ),
                 tf.keras.callbacks.History()
             ]
         )

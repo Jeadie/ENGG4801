@@ -71,8 +71,13 @@ def get_args() -> dict:
     )
     parser.add_argument(
         "--job-dir",
-        help="GCS location to write checkpoints and export models",
+        help="Location to write checkpoints and export models",
         required=True,
+    )
+    parser.add_argument(
+        "--job-name",
+        help="Name of the job/experiment."
+        default="experiment",
     )
     parser.add_argument(
         "--verbosity",
