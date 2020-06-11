@@ -4,7 +4,7 @@ from datetime import datetime
 from base.trainer import BaseTrain
 from models.vgg16 import VGG16
 from data_loader.data_loader import TFRecordShardLoader
-import matplotlib.pyplot as plt
+from data_loader.view_data import visualise_image
 
 
 class Trainer(BaseTrain):
@@ -35,11 +35,14 @@ class Trainer(BaseTrain):
             label:
         returns
         """
+        image = tf.transpose(image, [3, 1,2, 0])
+        print(f"Image shape: {image.shape}")
+        print(f"Label shape: {label.shape}")
         writer = tf.summary.create_file_writer(log_file)
         with writer.as_default():
-            tf.summary.image("input_image", image, step=0)
+            tf.summary.image("input_image", image, step=0, max_outputs=image.shape[0])
             tf.summary.histogram("input_image", image,step=0)
-            
+   
             # Convert one-hot to class label to plot.
             tf.summary.histogram("class_label", tf.math.argmax(label), step=0)
 
@@ -48,25 +51,38 @@ class Trainer(BaseTrain):
     def run(self) -> None:
 
         # intialise the estimator with your model
-        model = self.model.model()
-        model.summary()
+        # model = self.model.model()
+        # model.summary()
 
         dataset = self.train.input_fn()
+        img_dataset = self.train.input_fn()
+
+        imgs = []
+        lbls = []
+        for img, lbl in img_dataset.take(10):
+            imgs.append(img)
+            lbls.append(lbl)
+
+        # visualise_image("name", tf.transpose(tf.concat(imgs, -1), [3, 1,2, 0])[...,0])
+        self.tensorboard_aids( tf.concat(imgs, -1), tf.stack(lbls), log_file= self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+
         if not self.config["use_stack"]:
-            dataset.map(lambda img, label: ( tf.expand_dims(img[..., img.shape[-1]//2]), label))
-        else:
+            dataset = dataset.map(lambda img, label: ( tf.expand_dims(img[..., img.shape[-1]//2], axis=-1), label))
 
         # Send input images to Tensorboard
-        # dataset = dataset.map(lambda x,y: self.tensorboard_aids(x,y, log_file = self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S")))
+ #       dataset = dataset.map(lambda x,y: self.tensorboard_aids(x,y, log_file = self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S")))
+        
+        return
 
         model.fit(
             dataset,
+            epochs=self.config["num_epochs"],
             callbacks=[
-                tf.keras.callbacks.TensorBoard(
-                    log_dir=self.config["job_dir"],
-                    histogram_freq=1,
-                    # write_images=True # Odd error currently
-                ),
+#                tf.keras.callbacks.TensorBoard(
+#                    log_dir=self.config["job_dir"] + "train/" + datetime.now().strftime("%Y%m%d-%H%M%S"),
+#                    histogram_freq=1,
+#                  write_images=True # Odd error currently
+#                ),
                 tf.keras.callbacks.History()
             ]
         )

@@ -8,6 +8,7 @@ from tensorflow.keras.layers import (
     Flatten,
     GlobalAveragePooling2D,
     Input,
+    InputLayer,
     MaxPooling2D
 )
 import absl
@@ -39,7 +40,8 @@ class VGG16(BaseModel):
 
         input_shape = (256, 256, 19)
         img_input = Input(shape=input_shape)
-        
+        img_input = tf.identity(img_input, name="input")
+
         x = _vgg_block(img_input, 64, 2, activation, padding, "block1")
         x = _vgg_block(x, 128, 2, activation, padding, "block2")
         x = _vgg_block(x, 256, 3, activation, padding, "block3")
@@ -83,26 +85,31 @@ class babyVGG16(BaseModel):
         else:
             input_shape = (256, 256, 1)
 
-        img_input = Input(shape=input_shape)
-        
-        x = _vgg_block(img_input, 64, 2, activation, padding, "block1")
-        x = _vgg_block(x, 32, 2, activation, padding, "block2")
-        x = _vgg_block(x, 16, 2, activation, padding, "block3")
+        model = tf.keras.Sequential()
+        model.add(InputLayer(input_shape=input_shape))
+
+        # img_input = Input(shape=input_shape)
+        # x = tf.identity(img_input, name="input")
+
+        _vgg_block(model, 64, 2, activation, padding, "block1")
+        _vgg_block(model, 32, 2, activation, padding, "block2")
+        _vgg_block(model, 16, 2, activation, padding, "block3")
 
         # Classification block
-        x = Flatten(name='flatten')(x)
-        x = Dense(dense_units,
+        model.add(Flatten(name='flatten'))
+        model.add(Dense(dense_units,
                   activation=activation,
                   name='fc1',
-                  kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
+                  kernel_regularizer=tf.keras.regularizers.l2(0.01)))
 
-        x = Dropout(p_dropout)(x)
-        x = Dense(3, activation='softmax', name='predictions')(x)
+        model.add(Dropout(p_dropout))
+        model.add(Dense(3, activation='softmax', name='predictions'))
     
-        return construct(img_input, x, self.config, name="vgg16")
+        return construct(model, input_shape, self.config, name="vgg16")
 
-def construct(image, output, configuration, name=""):
-    model = tf.keras.Model(inputs=image, outputs=output, name=name)
+def construct(model, input_shape, configuration, name=""):
+    # model = tf.keras.Model(inputs=image, outputs=output, name=name)
+    model.build(input_shape)
     model.compile(
         optimizer=tf.keras.optimizers.Nadam(lr=configuration.get("learning_rate", 0.002)),
         loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
@@ -110,15 +117,15 @@ def construct(image, output, configuration, name=""):
     )
     return model
 
-def _vgg_block(x: tf.Tensor, filters: int, convs: int, activation: str, padding: str, name: str, p_dropout: float = -1) -> tf.Tensor:
+def _vgg_block(model: tf.keras.Sequential, filters: int, convs: int, activation: str, padding: str, name: str, p_dropout: float = -1):
     for c in range(convs):
-        x = Conv2D(filters, (3, 3),
+        model.add(Conv2D(filters, (3, 3),
                    activation=activation,
                    padding=padding,
-                   name=f'{name}_conv{c+1}')(x)
-        x = BatchNormalization()(x)
+                   name=f'{name}_conv{c+1}'))
+        model.add(BatchNormalization())
 
     if p_dropout != -1:
-        x = Dropout(p_dropout)(x)
+        model.add(Dropout(p_dropout))
 
-    return MaxPooling2D((2, 2), strides=(2, 2), name=f'{name}_pool')(x)
+    model.add(MaxPooling2D((2, 2), strides=(2, 2), name=f'{name}_pool'))

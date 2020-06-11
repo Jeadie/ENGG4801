@@ -16,9 +16,9 @@ if [ "$1" != "--job" ]; then
     JOB_DIR="$(pwd)/${OUTPUT_DIR}"
 
     # locations locally or on the cloud for your files
-    TRAIN_FILES="output/"  # data_loader/new-boi_1.tfrecords"
-    EVAL_FILES="output/" # /new-boi_1.tfrecords"
-    TEST_FILES="output/" # data/new-boi_1.tfrecords"
+    TRAIN_FILES="output/"  
+    EVAL_FILES="output/" 
+    TEST_FILES="output/"
 fi
 
 if [ "$GCS_FUSE_BUCKET" != "" ]; then
