@@ -9,6 +9,7 @@ import absl
 from base.data_loader import DataLoader
 import data_loader.util as util
 
+
 _logger = absl.logging
 
 class TFRecordShardLoader(DataLoader):
@@ -68,11 +69,24 @@ class TFRecordShardLoader(DataLoader):
         # Remove bad examples and enforce shape
         dataset = dataset.filter( lambda x, y: tf.math.reduce_min(x) != -10000)
 
-        # Not batching yet, expand dims.
-        dataset = dataset.map(lambda image, label: (tf.reshape(image, [-1, 256, 256, 14]), tf.reshape(label, [-1, 3])))
-        print(dataset)
+        # Preprocess
+        dataset = dataset.map(self.preprocess)
         # dataset = dataset.batch(batch_size=self.batch_size)
         return dataset
+
+    def preprocess(self, image, label):
+        """
+
+        :param image:
+        :param label:
+        :return:
+        """
+        image, label = tf.reshape(image, [-1, 256, 256, 14]), tf.reshape(label, [-1, 3])
+        # image = util.tf_equalize_histogram(image)
+        # image = tf.clip_by_value(image, clip_value_min=-1, clip_value_max=100)
+        # image, norms = tf.linalg.normalize(image)
+
+        return image, label
 
     def _parse_example(self,_example: tf.Tensor) -> tf.data.Dataset:
         """ Parses a single saved TFRecord example and parses it to a set of elements to be added to the dataset.
@@ -125,7 +139,6 @@ class TFRecordShardLoader(DataLoader):
                 util.filter_images, (images),
                 tf.float32)
 
-            print("AFTER PYFCUNG", images.shape)
             # Calculates Label
             group = tf.cast(util.calculate_group_from_results(results["pCR"], results["RCB"]), dtype=tf.uint8)
             group = tf.one_hot(group - 1, 3)[0, ...]

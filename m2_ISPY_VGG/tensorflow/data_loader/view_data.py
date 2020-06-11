@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
-from util import get_images
+from data_loader.util import get_images
 
 _logger = logging.getLogger("View Data")
 

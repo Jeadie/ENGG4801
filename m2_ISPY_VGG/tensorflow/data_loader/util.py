@@ -150,7 +150,7 @@ def prepare_image(image: tf.Tensor)-> tf.Tensor:
     if image.shape != (256, 256, 14):
         image = tf.image.resize(image, (256, 256))
 
-    return image
+    return tf_equalize_histogram(image)
 
 def calculate_group_from_results(pCR: Union[int, tf.Tensor], RCB: Union[int, tf.Tensor]) -> Union[int, tf.Tensor]:
     """ Calculates the response group of the patient from their pCR and RCB result.
@@ -193,3 +193,27 @@ def possible_imaging_series_tags() -> List[str]:
          'FL3D_T1_SAG_CA_', 'RT_SAG_FSE_T2___FATSAT', 'UNI_SAG_T2_FSE', 'UNI_SAG_T2_FSE_L', 'T2_RIGHT_BREAST',
          'LT_IR_SPGR_SAG', 'RT_IR_SPGR_SAG'
     ]]
+
+
+def tf_equalize_histogram(image):
+    # return image
+    imgs = []
+    for i in range(image.shape[-1]):
+         imgs.append(image_histogram_equalization(image[...,i], number_bins=1000))
+    return tf.stack(imgs, axis=-1)
+    # return _tf_equalize_histogram(image)
+
+
+
+def image_histogram_equalization(tensor, number_bins=256):
+    # from http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
+    image = tensor.numpy()
+    # get image histogram
+    image_histogram, bins = np.histogram(image.flatten(), number_bins, density=True)
+    cdf = image_histogram.cumsum() # cumulative distribution function
+    cdf = cdf / cdf[-1] # normalize
+
+    # use linear interpolation of cdf to find new pixel values
+    image_equalized = np.interp(image.flatten(), bins[:-1], cdf)
+
+    return tf.convert_to_tensor(image_equalized.reshape(image.shape), dtype=tf.float32)
