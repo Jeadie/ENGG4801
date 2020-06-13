@@ -33,10 +33,15 @@ def get_args() -> dict:
         required=True,
     )
     parser.add_argument(
+        "--data-loader",
+        help="Select the type of data loader for the dataset in use. Options: ['ResampledTFRecord', 'TFRecordShardLoader']",
+        type=str,
+    )
+    parser.add_argument(
         "--use-stack",
         help="Use the maximal amount of central image slices from a Series." ,
         type=bool,
-        default=True,
+        default=False,
     )
     parser.add_argument(
         "--train-batch-size", help="Batch size for training steps", type=int, default=32
@@ -76,7 +81,7 @@ def get_args() -> dict:
     )
     parser.add_argument(
         "--job-name",
-        help="Name of the job/experiment."
+        help="Name of the job/experiment.",
         default="experiment",
     )
     parser.add_argument(
