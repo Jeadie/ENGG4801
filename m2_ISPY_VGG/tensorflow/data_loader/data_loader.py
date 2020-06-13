@@ -1,7 +1,6 @@
-import multiprocessing
 import os
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import tensorflow as tf
 import absl
@@ -71,7 +70,7 @@ class TFRecordShardLoader(DataLoader):
 
         # Preprocess
         dataset = dataset.map(self.preprocess)
-        # dataset = dataset.batch(batch_size=self.batch_size)
+        dataset = dataset.batch(batch_size=self.batch_size, drop_remainder=True)
         return dataset
 
     def preprocess(self, image, label):
@@ -81,11 +80,10 @@ class TFRecordShardLoader(DataLoader):
         :param label:
         :return:
         """
-        image, label = tf.reshape(image, [-1, 256, 256, 14]), tf.reshape(label, [-1, 3])
-        # image = util.tf_equalize_histogram(image)
-        # image = tf.clip_by_value(image, clip_value_min=-1, clip_value_max=100)
-        # image, norms = tf.linalg.normalize(image)
-
+        if not self.config.get("use_stack"):
+            image, label = tf.reshape(image, [256, 256, 50], name="preprocess"), tf.reshape(label, [3])
+        else:
+            image, label = tf.reshape(image, [256, 256, 14], name="preprocess"), tf.reshape(label, [3])
         return image, label
 
     def _parse_example(self,_example: tf.Tensor) -> tf.data.Dataset:
@@ -136,7 +134,7 @@ class TFRecordShardLoader(DataLoader):
                 images.append(image)
 
             images = tf.py_function(
-                util.filter_images, (images),
+                util.filter_images(self.config), (images),
                 tf.float32)
 
             # Calculates Label
@@ -157,10 +155,9 @@ class TFRecordShardLoader(DataLoader):
         Returns:
             The same input example but possibly augmented
         """
-        # Convert Images
-        # images = tf.linalg.normalize(images, axis=0)
 
         # random rotation
+        augmentations = []
         if random.uniform(0, 1) > 0.5:
             example = tf.contrib.image.rotate(
                 example, tf.random_uniform((), minval=-0.2, maxval=0.2)

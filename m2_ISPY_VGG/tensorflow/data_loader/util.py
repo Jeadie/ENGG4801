@@ -2,7 +2,9 @@ from typing import Dict, List, Tuple, Union
 
 import absl
 import numpy as np
+import scipy
 import tensorflow as tf
+
 
 _logger = absl.logging
 
@@ -11,6 +13,16 @@ def int64List_feature(value: List[int]) -> tf.train.Feature:
     """ Converts an integer List into a int64_list Tensorflow feature.
         """
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+
+def _int64_feature(value: List[int]) -> tf.train.Feature:
+    """ Converts an integer List into a int64_list Tensorflow feature.
+    """
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+def floatList_feature(values: List[float]) -> tf.train.Feature:
+    """ Converts a Float Tensor into a float_list Tensorflow feature.
+    """
+    return tf.train.Feature(float_list=tf.train.FloatList(value=values))
 
 def bytes_feature(value: Union[bytes, str]) -> tf.train.Feature:
     """ Converts a byte or string data type into a bytes_list Tensorflow feature.
@@ -107,32 +119,32 @@ def reconstruct_image(image: tf.Tensor, shape: tf.Tensor) -> tf.Tensor:
     if shape == 3 * [-1]:
         return tf.constant(-1, dtype=tf.float32)
 
-    return tf.cast(tf.reshape(image, shape), tf.float32)
+    return tf.cast(tf.reshape(image, shape, name="reconstruct_image_reshape"), tf.float32)
 
-def filter_images(x1, x2, x3, x4, x11, x21, x31, x41, x12, x22, x32, x42, x13, x23, x33, x43, x17, x18,x19) -> tf.Tensor:
-# #     """images
-# #
-# #     Args:
-# #         images:
-# #     Returns:
-# #
-# #     """
-    images = [x1, x2, x3, x4, x11, x21, x31, x41, x12, x22, x32, x42, x13, x23, x33, x43, x17, x18,x19]
+def filter_images(config):
+    def _filter_images(x1, x2, x3, x4, x11, x21, x31, x41, x12, x22, x32, x42, x13, x23, x33, x43, x17, x18,x19) -> tf.Tensor:
+    # #     """images
+    # #
+    # #     Args:
+    # #         images:
+    # #     Returns:
+    # #
+    # #     """
+        images = [x1, x2, x3, x4, x11, x21, x31, x41, x12, x22, x32, x42, x13, x23, x33, x43, x17, x18,x19]
 
-# def filter_images(images) -> tf.Tensor:
-    images = list(filter(lambda x: x.shape != [], images))
+    # def filter_images(images) -> tf.Tensor:
+        images = list(filter(lambda x: x.shape != [], images))
 
-    if len(images) == 0:
-        return -10000 * tf.ones(
-            (256,256), dtype=tf.dtypes.float32, name=None
-        )
+        if len(images) == 0:
+            return -10000 * tf.ones(
+                (256,256), dtype=tf.dtypes.float32, name=None
+            )
+        image = list(map(lambda x: prepare_image(x, config), images))
+        ds = tf.stack(image, axis=0)
+        return ds
+    return _filter_images
 
-    # TODO: magically pick the best imaging series from all possible.
-    image = list(map(prepare_image, images))
-    ds = tf.stack(image, axis=0)
-    return ds
-
-def prepare_image(image: tf.Tensor)-> tf.Tensor:
+def prepare_image(image: tf.Tensor, config: Dict[str, object])-> tf.Tensor:
     """ Prepares an image from the tf.Example.
 
     Args:
@@ -141,16 +153,22 @@ def prepare_image(image: tf.Tensor)-> tf.Tensor:
     Returns:
          A slice of a transformed 3D image.
     """
-    # TODO: This must magically pick a single slice from 3D (eventually will have to pick 64x64 too.
     image = tf.transpose(image, [2, 1, 0])
     image_z = image.shape[-1]
 
-    image = image[..., (image_z//2 - 7 ):(image_z//2 + 7) ] #
-
-    if image.shape != (256, 256, 14):
+    if config["use_stack"]:
+        image = image[..., (image_z // 2 - 7):(image_z // 2 + 7)]  #
+    if image.shape[0:2] != (256, 256):
         image = tf.image.resize(image, (256, 256))
 
-    return tf_equalize_histogram(image)
+    if config.get("histogram_equalise", True):
+        image = tf_equalize_histogram(image)
+
+    if config.get("interpolate", True):
+        num_slices = config.get("num_slices", 50)
+        image = scipy.ndimage.interpolation.zoom(image, [1,1,num_slices/image.shape[-1]])
+    return image
+
 
 def calculate_group_from_results(pCR: Union[int, tf.Tensor], RCB: Union[int, tf.Tensor]) -> Union[int, tf.Tensor]:
     """ Calculates the response group of the patient from their pCR and RCB result.
@@ -196,17 +214,13 @@ def possible_imaging_series_tags() -> List[str]:
 
 
 def tf_equalize_histogram(image):
-    # return image
     imgs = []
     for i in range(image.shape[-1]):
-         imgs.append(image_histogram_equalization(image[...,i], number_bins=1000))
+         imgs.append(image_histogram_equalization(image[..., i], number_bins=1000))
     return tf.stack(imgs, axis=-1)
-    # return _tf_equalize_histogram(image)
-
 
 
 def image_histogram_equalization(tensor, number_bins=256):
-    # from http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
     image = tensor.numpy()
     # get image histogram
     image_histogram, bins = np.histogram(image.flatten(), number_bins, density=True)
