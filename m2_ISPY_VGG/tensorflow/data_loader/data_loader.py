@@ -80,10 +80,14 @@ class TFRecordShardLoader(DataLoader):
         :param label:
         :return:
         """
-        if not self.config.get("use_stack"):
-            image, label = tf.reshape(image, [256, 256, 50], name="preprocess"), tf.reshape(label, [3])
-        else:
+        # print(image.shape, label.shape)
+        if self.config.get("interpolate"):
+            num_slices = self.config.get("num_slices", 50)
+            image, label = tf.reshape(image, [256, 256, num_slices], name="preprocess"), tf.reshape(label, [3])
+        elif self.config.get("use_stack"):
             image, label = tf.reshape(image, [256, 256, 14], name="preprocess"), tf.reshape(label, [3])
+        else:
+            image, label = tf.reshape(image, [256, 256], name="preprocess"), tf.reshape(label, [3])
         return image, label
 
     def _parse_example(self,_example: tf.Tensor) -> tf.data.Dataset:
@@ -138,14 +142,14 @@ class TFRecordShardLoader(DataLoader):
                 tf.float32)
 
             # Calculates Label
-            group = tf.cast(util.calculate_group_from_results(results["pCR"], results["RCB"]), dtype=tf.uint8)
-            group = tf.one_hot(group - 1, 3)[0, ...]
+            # group = tf.cast(util.calculate_group_from_results(results["pCR"], results["RCB"]), dtype=tf.uint8)
+            images, group = tf.py_function(
+                util.create_grouping, (images, results["pCR"], results["RCB"]), (tf.float32, tf.float32)
+            )
 
             # Create Dataset
-            ds = tf.data.Dataset.from_tensor_slices(images)
-            return ds.map(lambda x: (x, group))
-
-            # return image, group
+            ds = tf.data.Dataset.from_tensor_slices((images, group))
+            return ds
 
     def _augment(self, example: tf.Tensor) -> tf.Tensor:
         """

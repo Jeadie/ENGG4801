@@ -33,6 +33,9 @@ class ResampledTFRecordDataset(TFRecordShardLoader):
                 tf_equalize_histogram,
                 (image, ),
                 tf.float32)
+        else:
+            image, norms = tf.linalg.normalize(image)
+
         return tf.reshape(image, [256, 256, 50]), label
 
     def deserialise_example(self, proto, shape=(256, 256, 50)) -> tf.Tensor:

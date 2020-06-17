@@ -137,12 +137,21 @@ def filter_images(config):
 
         if len(images) == 0:
             return -10000 * tf.ones(
-                (256,256), dtype=tf.dtypes.float32, name=None
+                (256, 256), dtype=tf.dtypes.float32, name=None
             )
         image = list(map(lambda x: prepare_image(x, config), images))
         ds = tf.stack(image, axis=0)
         return ds
     return _filter_images
+
+def create_grouping(images, pCR, RCB) -> Tuple[tf.Tensor, tf.Tensor]:
+    image_count = images.shape[0]
+
+    group = tf.constant([calculate_group_from_results(pCR, RCB) - 1,])
+    group = tf.tile(group, (image_count,))
+    group = tf.one_hot(tf.cast(group, tf.uint8), 3, axis=-1)
+
+    return images, group
 
 def prepare_image(image: tf.Tensor, config: Dict[str, object])-> tf.Tensor:
     """ Prepares an image from the tf.Example.
@@ -156,17 +165,23 @@ def prepare_image(image: tf.Tensor, config: Dict[str, object])-> tf.Tensor:
     image = tf.transpose(image, [2, 1, 0])
     image_z = image.shape[-1]
 
-    if config["use_stack"]:
-        image = image[..., (image_z // 2 - 7):(image_z // 2 + 7)]  #
     if image.shape[0:2] != (256, 256):
         image = tf.image.resize(image, (256, 256))
 
     if config.get("histogram_equalise", True):
         image = tf_equalize_histogram(image)
+    else:
+        image = (image - np.min(image)) /  (np.max(image) - np.min(image))
 
     if config.get("interpolate", True):
         num_slices = config.get("num_slices", 50)
         image = scipy.ndimage.interpolation.zoom(image, [1,1,num_slices/image.shape[-1]])
+
+    elif config["use_stack"]:
+        image = image[..., (image_z // 2 - 7):(image_z // 2 + 7)]  #
+    else:
+        image = image[..., image_z //2]
+
     return image
 
 
@@ -181,13 +196,13 @@ def calculate_group_from_results(pCR: Union[int, tf.Tensor], RCB: Union[int, tf.
         The integer, g representing the classification of the patient. 1 <= g <=3, (or tf.tensor equivalent).
     """
     # Remove if statements to make TF's life easier. i.e. make declaration integer/tensor(dtype=int) independent
-    return pCR + 2 * ((pCR is None) and (RCB <=2) ) +  3 * ((pCR is None) and RCB > 2 )
+    # return pCR + 2 * ((pCR is None) and (RCB <=2) ) +  3 * ((pCR is None) and RCB > 2 ) + 1
     # For integers, is equivalent to:
-    # if pCR:
-    #     return 1
-    # if RCB <= 2:
-    #     return 2
-    # return 3
+    if pCR:
+        return 1
+    if RCB <= 2:
+        return 2
+    return 3
 
 def required_imaging_series() -> List[str]:
     """ Returns all the imaging series descriptors that is needed in this model.

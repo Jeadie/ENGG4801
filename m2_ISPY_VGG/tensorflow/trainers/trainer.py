@@ -26,7 +26,7 @@ class Trainer(BaseTrain):
         """
         super().__init__(config, model, train, val, pred)
 
-    def tensorboard_aids(self, image, label, log_file = "./"):
+    def tensorboard_aids(self, image, label, _histogram, i):
         """
 
         Args:
@@ -34,43 +34,53 @@ class Trainer(BaseTrain):
             label:
         returns
         """
-        image = tf.transpose(image, [3, 1,2, 0])
-        print(f"Image shape: {image.shape}")
-        print(f"Label shape: {label.shape}")
-        writer = tf.summary.create_file_writer(log_file)
+        image = tf.transpose(image, [3, 1, 2, 0])
+        writer = tf.summary.create_file_writer(self.log_name)
         with writer.as_default():
-            tf.summary.image("input_image", tf.identity(image), step=0, max_outputs=image.shape[0])
-            tf.summary.histogram("input_image", tf.identity(image), step=0)
-   
+            if not _histogram:
+                tf.summary.histogram("input_image", tf.identity(image), step=0)
+            else:
+                tf.summary.image("input_image", tf.identity(image), step=i, max_outputs=image.shape[0])
+
+        with writer.as_default():
             # Convert one-hot to class label to plot.
-            tf.summary.histogram("class_label", tf.math.argmax(label), step=0)
+            tf.summary.histogram("class_label", tf.math.argmax(label, axis=1), step=0)
 
         return (image, label)
 
     def run(self) -> None:
-        dataset = ResampledTFRecordDataset(self.config, mode="train") # self.train.input
-        dataset = dataset.input_fn()
+        dataset = self.train.input_fn()
+        self.log_name = f"{self.config['job_dir']}{self.config['job_name']}/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
-        logs = ResampledTFRecordDataset(self.config, mode="train").input_fn().map(self.tensorboard_aids)
+        # Send images to tensorboard
+        i=0
 
-        self.config["batch_size"] = self.train.batch_size
+        for image, label in self.pred.input_fn().as_numpy_iterator():
+            # print(image.shape, tf.math.argmax(label, axis=1))
+            if i < 10:
+                self.tensorboard_aids(image, label, True, i)
+            elif i < 20:
+                self.tensorboard_aids(image, label, False, i)
+            else:
+                break
+            i+=1
 
         # intialise the estimator with your model
         model = self.model.model()
         model.summary()
 
-        log_name =  f"{self.config['job_dir']}{self.config['job_name']}/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
         if self.config["use_stack"]:
             dataset = dataset.map(lambda img, label: ( tf.expand_dims(img[..., img.shape[-1]//2], axis=-1), label))
 
+        print(dataset)
         model.fit(
             dataset,
             epochs=self.config["num_epochs"],
             verbose=2,
             callbacks=[
                 tf.keras.callbacks.TensorBoard(
-                    log_dir=log_name,
+                    log_dir=f"{self.config['job_dir']}{self.config['job_name']}/{datetime.now().strftime('%Y%m%d-%H%M%S')}",
                     histogram_freq=1,
                     write_images=True # Odd error currently
                 ),

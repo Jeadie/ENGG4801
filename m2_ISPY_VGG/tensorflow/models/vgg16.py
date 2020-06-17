@@ -77,6 +77,7 @@ def construct(model, input_shape, configuration, name=""):
         loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
         metrics=['accuracy'],
     )
+    tf.summary.histogram("model outputs", model.output)
     return model
 
 def _vgg_block(model: tf.keras.Sequential, filters: int, convs: int, activation: str, padding: str, name: str, p_dropout: float = -1):

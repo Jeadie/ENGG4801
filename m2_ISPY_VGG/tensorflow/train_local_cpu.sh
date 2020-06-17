@@ -16,10 +16,10 @@ if [ "$1" != "--job" ]; then
     JOB_DIR="$(pwd)/${OUTPUT_DIR}"
 
     # locations locally or on the cloud for your files
-    TRAIN_FILES="output/combined_total.tfrecords"  
+    TRAIN_FILES="output/" # combined_total.tfrecords"  
     EVAL_FILES="output/"
     TEST_FILES="output/"
-    DATA_LOADER="ResampledTFRecord" # TFRecordShardLoader
+    DATA_LOADER="TFRecordShardLoader" #"ResampledTFRecord" # TFRecordShardLoader
 fi
 
 if [ "$GCS_FUSE_BUCKET" != "" ]; then
