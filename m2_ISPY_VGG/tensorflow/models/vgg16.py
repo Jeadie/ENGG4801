@@ -52,7 +52,7 @@ class VGG16(BaseModel):
                         kernel_regularizer=tf.keras.regularizers.l2(0.01)))
 
         model.add(Dropout(p_dropout))
-        model.add(Dense(3, activation='softmax', name='predictions'))
+        model.add(Dense(3, name='y_pred')) # activation='softmax'
 
         return construct(model, input_shape, self.config, name="vgg16")
 

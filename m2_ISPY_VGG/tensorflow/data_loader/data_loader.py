@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import tensorflow as tf
 import absl
@@ -21,7 +21,6 @@ class TFRecordShardLoader(DataLoader):
         :param mode: current training mode (train, test, predict)
         """
         super().__init__(config, mode)
-
         # Get a list of files in case you are using multiple tfrecords
         if self.mode == "train":
             self.file_names = TFRecordShardLoader.get_file_or_files(self.config["train_files"])
@@ -34,7 +33,7 @@ class TFRecordShardLoader(DataLoader):
             self.batch_size = 1
 
     @staticmethod
-    def get_file_or_files(paths: List[str]) -> List[str]:
+    def get_file_or_files(paths: Union[str, List[str]]) -> List[str]:
         """ Gets all files in a folder or the single file itself.
 
         Args:
@@ -46,6 +45,7 @@ class TFRecordShardLoader(DataLoader):
             returns all files in the directory with appropriate suffix.
         """
         files = []
+        paths = [paths] if type(paths) is str else paths
         for p in paths:
             if os.path.isdir(p):
                 files.extend([f"{p}{x}" for x in os.listdir(p)])
